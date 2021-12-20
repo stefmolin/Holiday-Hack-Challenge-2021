@@ -1,4 +1,5 @@
-# KringleCon 4: Calling Birds (SANS Holiday Hack Challenge 2021)
+# [KringleCon 4: Calling Birds](https://2021.kringlecon.com/)
+*SANS Holiday Hack Challenge 2021*
 
 ## Main Objectives
 
