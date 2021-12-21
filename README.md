@@ -412,7 +412,7 @@ Help Angel Candysalt solve the Splunk challenge in Santa's great hall. Fitzy Sho
 There are 8 tasks to solve in order to complete the objective:
 
 ##### Task 1
-Capture the commands Eddie ran most often, starting with git. Looking only at his process launches as reported by Sysmon, record the most common git-related CommandLine that Eddie seemed to use.
+>Capture the commands Eddie ran most often, starting with git. Looking only at his process launches as reported by Sysmon, record the most common git-related CommandLine that Eddie seemed to use.
 
 Using this query, the answer is `git status`:
 ```
@@ -421,13 +421,13 @@ index=main sourcetype=journald source=Journald:Microsoft-Windows-Sysmon/Operatio
 ```
 
 ##### Task 2
-Looking through the git commands Eddie ran, determine the remote repository that he configured as the origin for the 'partnerapi' repo. The correct one!
+>Looking through the git commands Eddie ran, determine the remote repository that he configured as the origin for the 'partnerapi' repo. The correct one!
 
 This can be completed by just looking through the results from the previous command: `git@github.com:elfnp3/partnerapi.git`.
 
 ##### Task 3
 
-The 'partnerapi' project that Eddie worked on uses Docker. Gather the full docker command line that Eddie used to start the 'partnerapi' project on his workstation.
+>The 'partnerapi' project that Eddie worked on uses Docker. Gather the full docker command line that Eddie used to start the 'partnerapi' project on his workstation.
 
 Modify the query from task 1 to look for Docker commands:
 
@@ -437,6 +437,124 @@ index=main sourcetype=journald source=Journald:Microsoft-Windows-Sysmon/Operatio
 ```
 
 The answer is `docker compose up`.
+
+##### Task 4
+>Eddie had been testing automated static application security testing (SAST) in GitHub. Vulnerability reports have been coming into Splunk in JSON format via GitHub webhooks. Search all the events in the main index in Splunk and use the sourcetype field to locate these reports. Determine the URL of the vulnerable GitHub repository that the elves cloned for testing and document it here. You will need to search outside of Splunk (try GitHub) for the original name of the repository.
+
+Locate the events in question using the sample Splunk query provided in the links at the top:
+
+```
+index=main sourcetype=github_json
+```
+
+Then, scroll down to the `repository.url` field in the left sidebar. This shows some possible URLs:
+
+![repository.url field](./splunk.png)
+
+Notice the `dvws-node` portion of two of the URLs &ndash; this could have been forked from the outside, so use a search engine to find it on GitHub. Indeed, it's [this](https://github.com/snoopysecurity/dvws-node) repository.
+
+##### Task 5
+Santa asked Eddie to add a JavaScript library from NPM to the 'partnerapi' project. Determine the name of the library and record it here for our workshop documentation.
+
+These dependencies are stored in `package.json`. The following query looks for any `git commit` commands in which the log mentions both "partnerapi" and "package.json":
+
+```
+index=main sourcetype=journald source=Journald:Microsoft-Windows-Sysmon/Operational
+CommandLine="git commit*" partnerapi package.json | table CommandLine
+```
+
+This yields a single commit message with the solution `holiday-utils-js`:
+
+```
+git commit package.json -m Added holiday-utils-js dependency
+```
+
+##### Task 6
+Another elf started gathering a baseline of the network activity that Eddie generated. Start with [their search](https://hhc21.bossworkshops.io/en-US/app/SA-hhc/search?q=search%20index%3Dmain%20sourcetype%3Djournald%20source%3DJournald%3AMicrosoft-Windows-Sysmon%2FOperational%20EventCode%3D3%20user%3Deddie%20NOT%20dest_ip%20IN%20(127.0.0.*)%20NOT%20dest_port%20IN%20(22%2C53%2C80%2C443)%20%0A%7C%20stats%20count%20by%20dest_ip%20dest_port&display.page.search.mode=smart&dispatch.sample_ratio=1&workload_pool=&earliest=0&latest=now) and capture the full `process_name` field of anything that looks suspicious.
+
+Simply add `process_name` to the end of the query so that it includes it in the result. There are only two entries and the suspicious one stands out:
+
+```
+/usr/bin/nc.openbsd
+```
+
+##### Task 7
+Uh oh. This documentation exercise just turned into an investigation. Starting with the process identified in the previous task, look for additional suspicious commands launched by the same parent process. One thing to know about these Sysmon events is that Network connection events don't indicate the parent process ID, but Process creation events do! Determine the number of files that were accessed by a related process and record it here.
+
+Start by getting the parent process ID of the `/usr/bin/nc.openbsd` process launch:
+```
+index=main sourcetype=journald source=Journald:Microsoft-Windows-Sysmon/Operational EventCode=1
+user=eddie process_name=/usr/bin/nc.openbsd
+| table parent_process_id, parent_process, process_name
+```
+
+Then use this to search for other child processes of that parent process:
+```
+index=main sourcetype=journald source=Journald:Microsoft-Windows-Sysmon/Operational
+parent_process_id=6788 | table CommandLine
+```
+
+There are only two and only one contains files (6 of them):
+
+```
+cat /home/eddie/.aws/credentials /home/eddie/.ssh/authorized_keys /home/eddie/.ssh/config /home/eddie/.ssh/eddie /home/eddie/.ssh/eddie.pub /home/eddie/.ssh/known_hosts
+```
+
+##### Task 8
+Use Splunk and Sysmon Process creation data to identify the name of the Bash script that accessed sensitive files and (likely) transmitted them to a remote IP address.
+
+This is simply taking the previous query task one step further. In order for a script to have initiated the actions investigated in task 7, it had to have created a new process; therefore, we want the parent process of the Bash process whose child processes we were just investigating (6788):
+
+```
+index=main sourcetype=journald source=Journald:Microsoft-Windows-Sysmon/Operational EventCode=1
+user=eddie process_id=6788 | table parent_process_id, parent_process, process_name
+```
+
+The parent is a `preinstall.sh`.
+
+Solving this yields the phrase to mark the objective complete:
+
+>Thank you for helping Santa complete his investigation! Santa says you're a whiz!
+
+### 10. Now Hiring!
+#### Difficulty
+3/5
+
+#### Description
+What is the secret access key for the [Jack Frost Tower job applications server](https://apply.jackfrosttower.com/)? Brave the perils of Jack's bathroom to get hints from Noxious O. D'or.
+
+#### Solution
+
+
+### 11. Customer Complaint Analysis
+#### Difficulty
+2/5
+
+#### Description
+A human has accessed the Jack Frost Tower network with a non-compliant host. [Which three trolls complained about the human](https://downloads.holidayhackchallenge.com/2021/jackfrosttower-network.zip)? Enter the troll names in alphabetical order separated by spaces. Talk to Tinsel Upatree in the kitchen for hints.
+
+#### Solution
+
+
+### 12. Frost Tower Website Checkup
+#### Difficulty
+5/5
+
+#### Description
+Investigate [Frost Tower's website for security issues](https://staging.jackfrosttower.com/). This [source code](https://download.holidayhackchallenge.com/2021/frosttower-web.zip) will be useful in your analysis. In Jack Frost's TODO list, what job position does Jack plan to offer Santa? Ribb Bonbowford, in Santa's dining room, may have some pointers for you.
+
+#### Solution
+
+
+### 13. FPGA Programming
+#### Difficulty
+4/5
+
+#### Description
+Write your first FPGA program to make a doll sing. You might get some suggestions from Grody Goiterson, near Jack's elevator.
+
+#### Solution
+
 
 ## Side Quests
 These are completed at Cranberry Pi terminals throughout the game typically next to elves who introduce the task and can provide hints to the main objectives in exchange for helping them with these.
