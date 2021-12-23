@@ -710,11 +710,6 @@ Right click to inspect the game itself (not the full web page). Take a look at t
 
 Make sure to talk to Chimney Scissorsticks again to get tips for the Shellcode Primer objective.
 
-
-# TODO: Remaining Challenges on Santa's side
-### Eve Snowshoes - HoHo ... No
-(Santa's Office) --> needs to be solved to help objective 8 "Kereboasting" which is rated 5/5 --> save for later
-
 ### Noxious O. D'Or - IMDS Exploration
 >The Instance Metadata Service (IMDS) is a virtual server for cloud assets at the IP address 169.254.169.254. Send a couple ping packets to the server.
 
@@ -938,6 +933,114 @@ elfu@e958e83b81b3:~$ curl -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.1
 >🍬🍬🍬🍬Congratulations!🍬🍬🍬🍬
 You've completed the lesson on Instance Metadata interaction. Run 'exit' to close.
 
+
+### Eve Snowshoes - HoHo ... No
+```
+Jack is trying to break into Santa's workshop!
+
+Santa's elves are working 24/7 to manually look through logs, identify the
+malicious IP addresses, and block them. We need your help to automate this so
+the elves can get back to making presents!
+
+Can you configure Fail2Ban to detect and block the bad IPs?
+
+ * You must monitor for new log entries in /var/log/hohono.log
+ * If an IP generates 10 or more failure messages within an hour then it must
+   be added to the naughty list by running naughtylist add <ip>
+        /root/naughtylist add 12.34.56.78
+ * You can also remove an IP with naughtylist del <ip>
+        /root/naughtylist del 12.34.56.78
+ * You can check which IPs are currently on the naughty list by running
+        /root/naughtylist list
+
+You'll be rewarded if you correctly identify all the malicious IPs with a
+Fail2Ban filter in /etc/fail2ban/filter.d, an action to ban and unban in
+/etc/fail2ban/action.d, and a custom jail in /etc/fail2ban/jail.d. Don't
+add any nice IPs to the naughty list!
+
+*** IMPORTANT NOTE! ***
+
+Fail2Ban won't rescan any logs it has already seen. That means it won't
+automatically process the log file each time you make changes to the Fail2Ban
+config. When needed, run /root/naughtylist refresh to re-sample the log file
+and tell Fail2Ban to reprocess it.
+```
+
+Start by watching the KringleCon talk on this subject [here](https://www.youtube.com/watch?v=Fwv2-uV6e5I&list=PLjLd1hNA7YVx99qJF3OoPF-qunjqw-SoU&index=2). It walks you through everything you will need to do to create your own jail for this challenge.
+
+Start by taking a look at the `/var/log/hohono.log` file to check for what kind of strings would constitute an action to ban. Place the appropriate regex in a new configuration file at `/etc/fail2ban/filter.d/hohono.conf`:
+
+```shell
+root@32e408c97114:~# cat /etc/fail2ban/filter.d/hohono.conf
+[Definition]
+failregex = ^ Failed login from <HOST> for \w+$
+            ^ Invalid heartbeat '\w+' from <HOST>$
+            ^ Login from <HOST> rejected due to unknown user name$
+            ^ <HOST> sent a malformed request$
+datepattern = %%Y-%%m-%%d %%H:%%M:%%S
+```
+
+Next, we specify in `/etc/fail2ban/action.d/hohono.conf` what to do when something is banned/unbanned:
+
+```shell
+root@32e408c97114:~# cat /etc/fail2ban/action.d/hohono.conf 
+[Definition]
+actionban = /root/naughtylist add <ip>
+actionunban = /root/naughtylist del <ip>
+```
+
+Now, we can create the jail:
+```shell
+root@e6db0c75f086:~# cat /etc/fail2ban/jail.local 
+[hohono_jail]
+enabled = true
+logpath = /var/log/hohono.log
+maxretry = 10
+findtime = 60m
+bantime = 24h
+filter = hohono
+action = hohono
+```
+
+Next, we have to restart the service:
+```shell
+root@bf2562f17374:~# service fail2ban restart
+ * Restarting Authentication failure monitor fail2ban                          [ OK ] 
+```
+
+Finally, we can run the refresh command to test:
+```shell
+root@bf2562f17374:~# /root/naughtylist refresh
+Refreshing the log file...
+root@bf2562f17374:~# Log file refreshed! It may take fail2ban a few moments to re-process.
+12.76.209.2 has been added to the naughty list!
+221.171.135.2 has been added to the naughty list!
+185.136.188.80 has been added to the naughty list!
+189.31.216.240 has been added to the naughty list!
+18.212.12.147 has been added to the naughty list!
+193.62.232.9 has been added to the naughty list!
+66.112.202.33 has been added to the naughty list!
+135.223.88.13 has been added to the naughty list!
+98.152.90.41 has been added to the naughty list!
+108.181.210.84 has been added to the naughty list!
+174.22.166.200 has been added to the naughty list!
+18.112.4.217 has been added to the naughty list!
+164.252.119.177 has been added to the naughty list!
+127.79.133.109 has been added to the naughty list!
+68.140.135.51 has been added to the naughty list!
+5.70.196.43 has been added to the naughty list!
+You correctly identifed 16 IPs out of 16 bad IPs
+You incorrectly added 0 benign IPs to the naughty list
+
+
+
+
+*******************************************************************
+* You stopped the attacking systems! You saved our systems!
+*
+* Thank you for all of your help. You are a talented defender!
+*******************************************************************
+```
 
 # TODO: Remaining Challenges on JF's side
 ### Ingreta Tude - Frost Tower Website Checkup
