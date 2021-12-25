@@ -2033,7 +2033,7 @@ Write your first FPGA program to make a doll sing. You might get some suggestion
 
 #### Solution
 
-##### EE/CS 302: FPGA Design for Embedded Systems
+**EE/CS 302: FPGA Design for Embedded Systems**
 >Day 4 &ndash; Introduction to Verilog
 
 >Hello, students! In exercise #4, we continue our FPGA journey, documenting the creation of the sound chip for this holiday season's new Kurse 'em Out Karen doll. Our goal is to make the doll say its trademark phrase ("Let me talk to your manager!"). But, as I always tell you in class, we must walk before we run.
@@ -2074,7 +2074,7 @@ Some hints from Professor Qwerty Petabyte:
 
 ![FPGA assignment 4 hints](./fpga_hints.png)
 
-```
+<blockquote>
 Console
 
 Exercise #4 Objective: Students must prove their design before being allowed to program an actual device. The student's model must produce a 500Hz, 1KHz, and 2KHz square wave accurately AND accurately produce a square wave of a randomly chosen frequency. This tool will run the model under simulation, passing it the appropriate register values and measuring the frequency of the resulting square wave.
@@ -2082,7 +2082,7 @@ Exercise #4 Objective: Students must prove their design before being allowed to 
 Important: Students MUST perform all simulation tests with the SAME code. If the code is changed, all tests will need to be re-run.
 
                                           - Prof. Qwerty Petabyte 
-```
+</blockquote>
 
 The example provided uses a 100MHz clock, so we have to adjust to the 125MHz clock and allow for custom frequencies of sounds. What we have to keep in mind is that the clock frequency represents the number of cycles per second. We need to translate the desired frequency to the clock's frequency and divide up the cycle accordingly (and handle any rounding issues along the way):
 ```
