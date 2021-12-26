@@ -426,7 +426,7 @@ Obtain the secret sleigh research document from a host on the Elf University dom
 
 Signing up at ElfU gives you credentials for SSH access into the grading machine. These credentials don't last long though, so they may vary in this walkthrough as the challenge was completed over multiple days.
 
-![create account](./elfu.png)
+![create account](./images/elfu.png)
 
 ```shell
 ===================================================
@@ -1524,7 +1524,7 @@ index=main sourcetype=github_json
 
 Then, scroll down to the `repository.url` field in the left sidebar. This shows some possible URLs:
 
-![repository.url field](./splunk.png)
+![repository.url field](./images/splunk.png)
 
 Notice the `dvws-node` portion of two of the URLs &ndash; this could have been forked from the outside, so use a search engine to find it on GitHub. Indeed, it's [this](https://github.com/snoopysecurity/dvws-node) repository.
 
@@ -1606,11 +1606,11 @@ If you try to make up information, you just get "Submission Accepted", but if yo
 
 Example using Suzanne Hart: https://apply.jackfrosttower.com/?inputName=Suzanne+Hart&inputEmail=sh%40troll.com&inputPhone=1&inputField=Throwing+rocks+%28at+people%29&resumeFile=&inputWorkSample=http%3A%2F%2F169.254.169.254&additionalInformation=&submit=
 
-![Jack Frost Tower application submission for Suzanne Hart](./jf_apply_submission.png)
+![Jack Frost Tower application submission for Suzanne Hart](./images/jf_apply_submission.png)
 
 What's wrong with that image though? Could it be coming from the NPPD website (or at least it's intended to come from there)? Taking a look at this page on it's own in the browser reveals an interestingly different error message:
 
-![image has errors](./image_has_errors.png)
+![image has errors](./images/image_has_errors.png)
 
 Did the server make that request on our behalf though? Try using cURL on that same endpoint:
 
@@ -1823,7 +1823,7 @@ app.post('/postcontact', function(req, res, next){
 
 After sending the form information in twice, we can access the `/search` page:
 
-![Frost Tower search page](./jftower_search.png)
+![Frost Tower search page](./images/jftower_search.png)
 
 From there, we can access the `/dashboard` page, but the query is properly escaped there. The `/detail` page that we can access from here has a SQL injection vulnerability when you pass in multiple IDs like `https://staging.jackfrosttower.com/detail/957,0%20or%201=1;--`, which gives all of the users back:
 
@@ -1983,7 +1983,7 @@ https://staging.jackfrosttower.com/detail/0,0%20UNION%20ALL%20SELECT%20*%20FROM%
 
 This gives us back proof that the SQL injection works:
 
-![SQLi users](./sqli_users.png)
+![SQLi users](./images/sqli_users.png)
 
 Unfortunately, that information isn't what we are after. We need to take advantage of this vulnerability to extract unseen tables from the database. Note that the date columns must stay as dates to avoid JavaScript errors, so we can only play with the remaining fields. Walk through the tables to find anything interesting using the [information schema](https://dev.mysql.com/doc/mysql-infoschema-excerpt/8.0/en/information-schema-table-reference.html):
 ```
@@ -1996,7 +1996,7 @@ https://staging.jackfrosttower.com/detail/0,0%20UNION%20ALL%20SELECT%20*%20FROM%
 ```
 
 Now, we can see that this table has 3 columns:
-![todo table columns](./todo_table_columns.png)
+![todo table columns](./images/todo_table_columns.png)
 
 With one last SQL injection query, we can extract our objective:
 ```
@@ -2005,7 +2005,7 @@ https://staging.jackfrosttower.com/detail/0,0%20UNION%20ALL%20SELECT%20*%20FROM%
 
 The answer is `clerk`:
 
-![Jack's TODO list item for Santa's new job](./obj12.png)
+![Jack's TODO list item for Santa's new job](./images/obj12.png)
 
 ### 13. FPGA Programming
 #### Difficulty
@@ -2031,31 +2031,31 @@ Write your first FPGA program to make a doll sing. You might get some suggestion
 
 Start by watching [this talk](https://www.youtube.com/watch?v=GFdG1PJ4QjA&list=PLjLd1hNA7YVx99qJF3OoPF-qunjqw-SoU&index=4) to learn the concepts:
 
-![FPGA intro](./fpga_intro.png)
+![FPGA intro](./images/fpga_intro.png)
 
 Verilog is not a programming language it's a **Hardware Description Language (HDL)**:
 
-![concepts](./hdl.png)
+![concepts](./images/hdl.png)
 
 Here's an example for the functionality of blinking an LED light:
 
-![Verilog example](./verilog_example.png)
+![Verilog example](./images/verilog_example.png)
 
 Some important HDL concepts from that example:
 
-![HDL concepts for "blink" module](./module_concepts.png)
+![HDL concepts for "blink" module](./images/module_concepts.png)
 
 The outcome of the FPGA is actually this:
 
-![logic gates](./logic_gates.png)
+![logic gates](./images/logic_gates.png)
 
 Now, for the task:
 
-![assignment 4](./assignment_4.png)
+![assignment 4](./images/assignment_4.png)
 
 Some hints from Professor Qwerty Petabyte:
 
-![FPGA assignment 4 hints](./fpga_hints.png)
+![FPGA assignment 4 hints](./images/fpga_hints.png)
 
 <blockquote>
 Console
@@ -2130,11 +2130,11 @@ endmodule
 
 Once this is complete, walk over to the station where the troll Crunchy Squishter is building a device to communicate with the troll's home planet. Click on it, drag the FPGA chip onto the device, and summon the space ship:
 
-![troll space ship](./troll_spaceship.png)
+![troll space ship](./images/troll_spaceship.png)
 
 Go into the space ship and talk to everyone there from right to left (otherwise they won't have anything to say). After you talk to the last one (Santa), the credits will roll:
 
-![creditsc](./credits.png)
+![creditsc](./images/credits.png)
 
 ## Side Quests
 These are completed at Cranberry Pi terminals throughout the game typically next to elves who introduce the task and can provide hints to the main objectives in exchange for helping them with these.
@@ -2203,7 +2203,7 @@ In the above, you can see it needs a key `Registration` with value `True` (as a 
 ### Grody Goiterson - Frost Tower Elevator
 Solve a mini-puzzle with 6 possible logic gates to get all lights at the bottom light up.
 
-![logic gates](./hhc_frostavator.png)
+![logic gates](./images/hhc_frostavator.png)
 
 
 ### Jewel Loggins - IPv6 Sandbox
@@ -2211,15 +2211,15 @@ With access to one machine, find the password that is on another machine in the 
 
 First, use `ping6` to find local addresses in the network segment. This hits the local hosts and routers using multicast addresses:
 
-![ipv6 ping6](./hhc_ping6.png)
+![ipv6 ping6](./images/hhc_ping6.png)
 
 Use `nmap` on each of the IPv6 addresses in the previous result:
 
-![ipv6 nmap](./hhc_nmap.png)
+![ipv6 nmap](./images/hhc_nmap.png)
 
 Using `curl` on the machine with port 80 open provides another clue:
 
-![ipv6 curl](./hhc_curl.png)
+![ipv6 curl](./images/hhc_curl.png)
 
 Use `netcat` to connect to the other port on that machine as indicated in the above result:
 
