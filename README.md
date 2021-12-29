@@ -2237,7 +2237,7 @@ HOHOHO: %7B%22single_player%22%3Atrue%7D
 
 This isn't enough to win though because it just makes it possible for one side to be controlled and start the game with a single player. The elf mentions that **two** client-side values have to be changed, one of which is passed to the server (the cookie). So something else needs to be tampered with...
 
-Right click to inspect the game itself (not the full web page). Take a look at the JavaScript behind the game &ndash; any interesting variables? Navigate to the "Console" tab and set "single_player = true" to have a computer agent join. Then, play the game.
+Right click to inspect the game itself (not the full web page). Take a look at the JavaScript behind the game &ndash; any interesting variables? Navigate to the "Console" tab and set "single_player_mode = true" to have a computer agent join. Then, play the game.
 
 Make sure to talk to Chimney Scissorsticks again to get tips for the Shellcode Primer objective.
 
